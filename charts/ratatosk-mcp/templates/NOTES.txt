@@ -1,0 +1,7 @@
+ratatosk-mcp is up. In-cluster MCP endpoint (streamable HTTP):
+
+  http://{{ include "ratatosk-mcp.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/mcp
+
+Point your in-cluster agent's MCP client at that URL. Versions you pass to
+check_stack are compared inside this pod — only project slugs reach
+{{ .Values.ratatoskUrl }}.
