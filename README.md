@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/ratatosk-hero.webp" width="280" alt="Ratatosk — a messenger squirrel with a scroll in its bag, waving hello">
+<img src="docs/assets/ratatosk-hero.webp" width="280" alt="Ratatosk, a messenger squirrel with a scroll in its bag, waving hello">
 
 # ratatosk-mcp
 
@@ -13,11 +13,11 @@
 ---
 
 In Norse myth, Ratatosk is the squirrel that carries messages up and down the
-world tree. This one carries release intelligence: [ratatosk.io](https://ratatosk.io)
+world tree. This one carries release intelligence. [ratatosk.io](https://ratatosk.io)
 watches 74+ CNCF projects and turns every release note into typed, entity-level
-facts — security fixes, breaking changes, removals, deprecations, changed
-defaults. The plain bug fixes and feature fluff are filtered out; what's left
-is what an operator actually acts on.
+facts: security fixes, breaking changes, removals, deprecations, changed
+defaults. Plain bug fixes and marketing copy are filtered out. What remains is
+what an operator acts on.
 
 This MCP server hands those facts to your agent as four tools.
 
@@ -27,23 +27,25 @@ This MCP server hands those facts to your agent as four tools.
 >
 > **Your agent** calls `check_stack` and answers from facts: the CVEs fixed
 > after your version, the APIs removed on your upgrade path, the defaults that
-> changed — each with a verbatim quote from the release notes as evidence.
+> changed. Each fact carries a verbatim quote from the release notes as
+> evidence.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `list_facts` | Incremental fact feed — filter by `project`, `type`, `severity`; cursor with `since` |
+| `list_facts` | Incremental fact feed. Filter by `project`, `type`, `severity`; poll with the `since` cursor |
 | `facts_by_entity` | Reverse index: every fact touching one identifier (CVE id, CRD, feature gate, flag, config field, dependency) |
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. `facts: []` with `coverage: full_reviewed` means the release was read and is routine |
-| `check_stack` | Give it your running component versions; returns the facts from releases **newer** than what you run — your upgrade path |
+| `check_stack` | Takes the component versions you run, returns the facts from newer releases: your upgrade path |
 
-## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> Your versions never leave your side
+## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> Your versions stay on your side
 
-`check_stack` fetches facts by **project slug only** and compares version keys
-locally, inside this process. What you run never reaches ratatosk.io — the
-server broadcasts facts, your agent decides relevance. The version normalizer
-is bundled (`internal/version`) so range comparison happens client-side.
+`check_stack` sends only project slugs to the server and compares version keys
+locally, inside this process. What you run never reaches ratatosk.io. The
+server publishes facts; your agent decides what applies. The version
+normalizer is bundled (`internal/version`), so range comparison happens
+client-side too.
 
 ## Quick start (stdio)
 
@@ -65,7 +67,7 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:l
 ## In-cluster (streamable HTTP + Helm)
 
 Set `MCP_HTTP_ADDR` and the same binary serves MCP over streamable HTTP at
-`/mcp` (plus `/healthz`):
+`/mcp`, with `/healthz` for probes:
 
 ```bash
 MCP_HTTP_ADDR=:8080 ./ratatosk-mcp
@@ -97,9 +99,9 @@ docker run -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:
 
 ## Upstream API
 
-Everything here is a thin client over the public REST API — `GET /v1` on
-ratatosk.io is self-describing if you'd rather call it directly. No API key,
-rate limited at 60 requests/minute per IP.
+This server is a thin client over the public REST API. If you would rather
+call it directly, `GET /v1` on ratatosk.io describes itself. No API key; rate
+limited at 60 requests per minute per IP.
 
 ## License
 
