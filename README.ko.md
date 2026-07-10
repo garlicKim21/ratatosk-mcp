@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/ratatosk.png" width="380" alt="라타토스크 — 두루마리를 가방에 넣고 손을 흔드는 배달부 다람쥐">
+<img src="docs/assets/ratatosk-hero.webp" width="280" alt="라타토스크 — 두루마리를 가방에 넣고 손을 흔드는 배달부 다람쥐">
 
 # ratatosk-mcp
 

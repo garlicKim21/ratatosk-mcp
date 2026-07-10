@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/ratatosk.png" width="380" alt="Ratatosk — a messenger squirrel with a scroll in its bag, waving hello">
+<img src="docs/assets/ratatosk-hero.webp" width="280" alt="Ratatosk — a messenger squirrel with a scroll in its bag, waving hello">
 
 # ratatosk-mcp
 

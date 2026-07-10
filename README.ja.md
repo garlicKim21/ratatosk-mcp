@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/ratatosk.png" width="380" alt="ラタトスク — 巻物をかばんに入れ、手を振るメッセンジャーリス">
+<img src="docs/assets/ratatosk-hero.webp" width="280" alt="ラタトスク — 巻物をかばんに入れ、手を振るメッセンジャーリス">
 
 # ratatosk-mcp
 
