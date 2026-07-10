@@ -99,6 +99,14 @@ docker run -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:
 ratatosk.io의 `GET /v1`이 스스로를 설명합니다. API 키는 없고, IP당 분당
 60회 제한만 있습니다.
 
+## 데이터와 약관
+
+데이터는 ratatosk.io가 [이용약관](https://ratatosk.io/terms)에 따라 무료로
+제공합니다(변경될 수 있으며, 변경 시 사전 공지). 분석은 AI가 생성한 참고
+정보이며 보증이 없습니다 — 조치 전에 원문 릴리즈 노트를 확인하세요. 에이전트가
+대신 작업하는 경우에도 마찬가지입니다. 원문의 저작권은 각 프로젝트에 있으며,
+원문 전체가 실리는 응답에는 출처 고지(`raw_notes_notice`)가 함께 담깁니다.
+
 ## 라이선스
 
-[Apache-2.0](LICENSE)
+이 저장소의 코드는 [Apache-2.0](LICENSE)로 배포됩니다.

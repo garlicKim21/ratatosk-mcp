@@ -103,6 +103,15 @@ This server is a thin client over the public REST API. If you would rather
 call it directly, `GET /v1` on ratatosk.io describes itself. No API key; rate
 limited at 60 requests per minute per IP.
 
+## Data & terms
+
+The data is served by ratatosk.io free of charge (subject to change, with
+advance notice) under its [terms of service](https://ratatosk.io/terms).
+Analyses are AI-generated reference information with no warranty — check the
+original release notes before acting, especially when an agent acts on your
+behalf. Original notes belong to their respective projects; responses that
+carry a full note include an attribution notice (`raw_notes_notice`).
+
 ## License
 
-[Apache-2.0](LICENSE)
+The code in this repository is licensed under [Apache-2.0](LICENSE).
