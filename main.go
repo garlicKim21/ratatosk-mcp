@@ -33,7 +33,7 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.1"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
@@ -328,9 +328,13 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 }
 
 // briefReport compresses the upgrade path: sorted by version, the same
-// issue_key on several branches collapsed into its earliest fix (an operator
-// upgrades once — the nearest release that fixes the issue is the actionable
-// one), then split into action_required (critical/high) and one-liner rest.
+// advisory (falling back to issue_key when no advisory is attached) on
+// several branches collapsed into its earliest fix (an operator upgrades
+// once — the nearest release that fixes the issue is the actionable one),
+// then split into action_required (critical/high) and one-liner rest.
+// Extraction judges each release note independently, so the same advisory
+// can carry different severities across branches — a collapsed entry shows
+// the strongest judgment in its group.
 func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []briefFact) {
 	idx := make([]int, len(relevant))
 	for i := range idx {
@@ -352,10 +356,20 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 	var ordered []*briefFact
 	for _, i := range idx {
 		f := relevant[i]
-		if f.IssueKey != "" {
-			if kept, ok := byIssue[f.IssueKey]; ok {
+		key := f.GroupKey
+		if key == "" {
+			key = f.IssueKey
+		}
+		if key != "" {
+			if kept, ok := byIssue[key]; ok {
 				if f.Version != kept.Version && !slices.Contains(kept.AlsoIn, f.Version) {
 					kept.AlsoIn = append(kept.AlsoIn, f.Version)
+				}
+				if severityRank[strings.ToLower(f.Severity)] > severityRank[strings.ToLower(kept.Severity)] {
+					kept.Severity = f.Severity
+				}
+				if f.Mandatory {
+					kept.Mandatory = true
 				}
 				continue
 			}
@@ -370,17 +384,21 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 			Quote:     f.Quote,
 			IDs:       f.RefIDs,
 		}
-		if f.IssueKey != "" {
-			byIssue[f.IssueKey] = bf
+		if key != "" {
+			byIssue[key] = bf
 		}
 		ordered = append(ordered, bf)
-		sum.BySeverity[f.Severity]++
 		sum.ByType[f.FactType]++
-		if f.Mandatory {
+	}
+	sum.DistinctIssues = len(ordered)
+	// severity/mandatory counts reflect the collapsed entries, whose severity
+	// may have been raised by a later branch's judgment
+	for _, bf := range ordered {
+		sum.BySeverity[bf.Severity]++
+		if bf.Mandatory {
 			sum.Mandatory++
 		}
 	}
-	sum.DistinctIssues = len(ordered)
 
 	action := []briefFact{}
 	other := []briefFact{}

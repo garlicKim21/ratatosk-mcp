@@ -37,6 +37,7 @@ type Fact struct {
 	Severity  string          `json:"severity"`
 	Mandatory bool            `json:"mandatory"`
 	IssueKey  string          `json:"issue_key"`
+	GroupKey  string          `json:"advisory_group_key"`
 	Quote     string          `json:"quote"`
 	RefIDs    []string        `json:"ids"`
 	Condition string          `json:"condition"` // applies_if as one phrase; "" = unconditional
@@ -52,6 +53,7 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 		Severity  string `json:"severity"`
 		Mandatory bool   `json:"mandatory"`
 		IssueKey  string `json:"issue_key"`
+		GroupKey  string `json:"advisory_group_key"`
 		AppliesIf struct {
 			Status     string `json:"status"`
 			Verb       string `json:"verb"`
@@ -70,7 +72,7 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 	}
 	f.FactID, f.Project, f.Version = a.FactID, a.Project, a.Version
 	f.FactType, f.Severity, f.Mandatory = a.FactType, a.Severity, a.Mandatory
-	f.IssueKey = a.IssueKey
+	f.IssueKey, f.GroupKey = a.IssueKey, a.GroupKey
 	f.Quote, f.RefIDs = a.References.Quote, a.References.IDs
 	switch a.AppliesIf.Status {
 	case "structured":
