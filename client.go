@@ -99,7 +99,7 @@ func (c *apiClient) get(path string, q url.Values, out any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "ratatosk-mcp/0.1")
+	req.Header.Set("User-Agent", "ratatosk-mcp/0.2")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
@@ -180,10 +180,14 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 	return out.Facts, nil
 }
 
-func (c *apiClient) getRelease(project, versionTag string) (json.RawMessage, error) {
+func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (json.RawMessage, error) {
 	var raw json.RawMessage
 	path := "/v1/releases/" + url.PathEscape(project) + "/" + url.PathEscape(versionTag)
-	if err := c.get(path, nil, &raw); err != nil {
+	var q url.Values
+	if includeRaw {
+		q = url.Values{"include": {"raw"}}
+	}
+	if err := c.get(path, q, &raw); err != nil {
 		return nil, err
 	}
 	return raw, nil

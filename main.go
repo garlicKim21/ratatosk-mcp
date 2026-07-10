@@ -33,7 +33,7 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.1.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
@@ -53,7 +53,9 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_release",
 		Description: "One reviewed release: envelope (coverage, assessment, source URL) plus all its facts. " +
-			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence.",
+			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence. " +
+			"Set include_raw for the original release note body (raw_notes); when the review is not the full story " +
+			"(coverage insufficient, or zero facts) raw_notes is included automatically.",
 	}, getReleaseTool)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -149,15 +151,16 @@ func factsByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args facts
 // ---------------------------------------------------------------------------
 
 type getReleaseArgs struct {
-	Project string `json:"project" jsonschema:"project slug, e.g. envoy"`
-	Version string `json:"version" jsonschema:"release tag exactly as published, e.g. v1.38.3"`
+	Project    string `json:"project" jsonschema:"project slug, e.g. envoy"`
+	Version    string `json:"version" jsonschema:"release tag exactly as published, e.g. v1.38.3"`
+	IncludeRaw bool   `json:"include_raw,omitempty" jsonschema:"also return the original release note body as raw_notes — judge from the source instead of the extracted facts"`
 }
 
 func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getReleaseArgs) (*mcp.CallToolResult, any, error) {
 	if args.Project == "" || args.Version == "" {
 		return errResult(fmt.Errorf("project and version are required")), nil, nil
 	}
-	raw, err := api.getRelease(args.Project, args.Version)
+	raw, err := api.getRelease(args.Project, args.Version, args.IncludeRaw)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
