@@ -4,7 +4,7 @@
 
 # ratatosk-mcp
 
-**Ratatosk reads CNCF release notes every hour, so your agents don't have to.**
+**Ratatosk reads CNCF release notes every hour. Your agents get the facts.**
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
