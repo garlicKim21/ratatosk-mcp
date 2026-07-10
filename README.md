@@ -1,11 +1,33 @@
+<div align="center">
+
+<img src="docs/assets/ratatosk.png" width="380" alt="Ratatosk — a messenger squirrel with a scroll in its bag, waving hello">
+
 # ratatosk-mcp
 
-MCP server for [Ratatosk](https://ratatosk.io) — release intelligence for the
-CNCF ecosystem. Ratatosk reads the release notes of 74+ CNCF projects every
-hour and extracts typed, entity-level change facts: security fixes, breaking
-changes, removals, deprecations, renames, default changes. This server exposes
-those facts as MCP tools, so your agent can answer "what do I need to do
-before upgrading?" from data instead of guesswork.
+**Ratatosk reads CNCF release notes every hour, so your agents don't have to.**
+
+[English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
+
+</div>
+
+---
+
+In Norse myth, Ratatosk is the squirrel that carries messages up and down the
+world tree. This one carries release intelligence: [ratatosk.io](https://ratatosk.io)
+watches 74+ CNCF projects and turns every release note into typed, entity-level
+facts — security fixes, breaking changes, removals, deprecations, changed
+defaults. The plain bug fixes and feature fluff are filtered out; what's left
+is what an operator actually acts on.
+
+This MCP server hands those facts to your agent as four tools.
+
+## What it feels like
+
+> **You:** "We run envoy v1.36.8 and istio 1.30.1. Anything we must do before upgrading?"
+>
+> **Your agent** calls `check_stack` and answers from facts: the CVEs fixed
+> after your version, the APIs removed on your upgrade path, the defaults that
+> changed — each with a verbatim quote from the release notes as evidence.
 
 ## Tools
 
@@ -16,7 +38,7 @@ before upgrading?" from data instead of guesswork.
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. `facts: []` with `coverage: full_reviewed` means the release was read and is routine |
 | `check_stack` | Give it your running component versions; returns the facts from releases **newer** than what you run — your upgrade path |
 
-### Privacy: versions never leave your side
+## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> Your versions never leave your side
 
 `check_stack` fetches facts by **project slug only** and compares version keys
 locally, inside this process. What you run never reaches ratatosk.io — the
@@ -32,6 +54,12 @@ go build -o ratatosk-mcp .
 claude mcp add ratatosk -- /path/to/ratatosk-mcp
 
 # or any MCP client over stdio
+```
+
+Or skip the build and use the container image:
+
+```bash
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:latest
 ```
 
 ## In-cluster (streamable HTTP + Helm)
@@ -60,12 +88,12 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 
 ## Container image
 
+Multi-arch (`linux/amd64`, `linux/arm64`), built on every release tag:
+
 ```bash
 docker run -i ghcr.io/garlickim21/ratatosk-mcp:latest            # stdio
 docker run -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:latest
 ```
-
-Images are built for `linux/amd64` and `linux/arm64` on every release tag.
 
 ## Upstream API
 
