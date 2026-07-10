@@ -35,7 +35,7 @@
 | `list_facts` | 증분 사실 피드. `project`·`type`·`severity`로 거르고 `since` 커서로 이어받습니다 |
 | `facts_by_entity` | 역인덱스. CVE, CRD, 피처 게이트, 플래그, 설정 필드, 의존성 등 식별자 하나를 건드린 사실을 전부 찾습니다 |
 | `get_release` | 검토된 릴리스 한 건의 커버리지·평가·원문 링크·사실 전체. `facts: []`에 `coverage: full_reviewed`면 읽어봤지만 평이한 릴리스라는 뜻입니다 |
-| `check_stack` | 지금 쓰는 컴포넌트 버전을 주면 그 뒤에 나온 릴리스의 사실들을 돌려줍니다. 곧 업그레이드 경로입니다 |
+| `check_stack` | 지금 쓰는 컴포넌트 버전을 주면 업그레이드 경로를 브리핑으로 돌려줍니다. critical/high는 전문, 나머지는 한 줄씩, 여러 브랜치에서 고쳐진 같은 이슈는 한 항목으로 접습니다. 전문 전체는 `detail: "full"`, 한 단계 업그레이드만은 `target_version`, 등급 필터는 `severity_min` |
 
 ## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> 버전은 밖으로 나가지 않습니다
 

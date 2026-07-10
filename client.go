@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -27,25 +28,56 @@ func newAPIClient(baseURL string) *apiClient {
 
 // Fact keeps the envelope as raw-ish JSON-friendly structs; the MCP tools
 // return facts verbatim, so only the fields the tools themselves inspect
-// (fact_id, version) get dedicated types.
+// (identity, and what check_stack's brief mode summarizes) get dedicated types.
 type Fact struct {
-	FactID  int             `json:"fact_id"`
-	Project string          `json:"project"`
-	Version string          `json:"version"`
-	Raw     json.RawMessage `json:"-"`
+	FactID    int             `json:"fact_id"`
+	Project   string          `json:"project"`
+	Version   string          `json:"version"`
+	FactType  string          `json:"fact_type"`
+	Severity  string          `json:"severity"`
+	Mandatory bool            `json:"mandatory"`
+	IssueKey  string          `json:"issue_key"`
+	Quote     string          `json:"quote"`
+	RefIDs    []string        `json:"ids"`
+	Condition string          `json:"condition"` // applies_if as one phrase; "" = unconditional
+	Raw       json.RawMessage `json:"-"`
 }
 
 func (f *Fact) UnmarshalJSON(b []byte) error {
 	type alias struct {
-		FactID  int    `json:"fact_id"`
-		Project string `json:"project"`
-		Version string `json:"version"`
+		FactID    int    `json:"fact_id"`
+		Project   string `json:"project"`
+		Version   string `json:"version"`
+		FactType  string `json:"fact_type"`
+		Severity  string `json:"severity"`
+		Mandatory bool   `json:"mandatory"`
+		IssueKey  string `json:"issue_key"`
+		AppliesIf struct {
+			Status     string `json:"status"`
+			Verb       string `json:"verb"`
+			TargetKind string `json:"target_kind"`
+			TargetName string `json:"target_name"`
+			Fallback   string `json:"fallback"`
+		} `json:"applies_if"`
+		References struct {
+			IDs   []string `json:"ids"`
+			Quote string   `json:"quote"`
+		} `json:"references"`
 	}
 	var a alias
 	if err := json.Unmarshal(b, &a); err != nil {
 		return err
 	}
 	f.FactID, f.Project, f.Version = a.FactID, a.Project, a.Version
+	f.FactType, f.Severity, f.Mandatory = a.FactType, a.Severity, a.Mandatory
+	f.IssueKey = a.IssueKey
+	f.Quote, f.RefIDs = a.References.Quote, a.References.IDs
+	switch a.AppliesIf.Status {
+	case "structured":
+		f.Condition = strings.TrimSpace(strings.Join([]string{a.AppliesIf.Verb, a.AppliesIf.TargetKind, a.AppliesIf.TargetName}, " "))
+	case "degraded":
+		f.Condition = a.AppliesIf.Fallback
+	}
 	f.Raw = append(f.Raw[:0], b...)
 	return nil
 }

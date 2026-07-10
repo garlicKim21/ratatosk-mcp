@@ -15,6 +15,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
+	"sort"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -57,7 +60,11 @@ func main() {
 		Name: "check_stack",
 		Description: "Check the user's running component versions against known facts. Versions are compared " +
 			"LOCALLY — only project slugs are sent to the ratatosk server, running versions never leave this process. " +
-			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path).",
+			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
+			"Default is a briefing: summary counts, critical/high facts in action_required, one line each for the rest, " +
+			"and the same advisory fixed on several release branches collapsed into one entry. " +
+			"Use detail:\"full\" for every fact verbatim, target_version to limit to one upgrade hop, " +
+			"severity_min to filter. Drill down with get_release or facts_by_entity.",
 	}, checkStackTool)
 
 	// Two transports, one binary: stdio for local agents (Claude Code, MCP
@@ -78,8 +85,10 @@ func main() {
 	}
 }
 
+// jsonResult marshals compactly: tool output is read by agents, and the
+// indentation whitespace alone was ~40% of a large check_stack response.
 func jsonResult(v any) (*mcp.CallToolResult, error) {
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
@@ -160,34 +169,94 @@ func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getRelea
 // ---------------------------------------------------------------------------
 
 type stackComponent struct {
-	Project string `json:"project" jsonschema:"project slug, e.g. envoy"`
-	Version string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
+	Project       string `json:"project" jsonschema:"project slug, e.g. envoy"`
+	Version       string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
+	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination: only facts with running < version <= target are returned"`
 }
 
 type checkStackArgs struct {
-	Components []stackComponent `json:"components" jsonschema:"the running stack to check"`
+	Components  []stackComponent `json:"components" jsonschema:"the running stack to check"`
+	SeverityMin string           `json:"severity_min,omitempty" jsonschema:"only facts at or above this severity: info|low|medium|high|critical"`
+	Detail      string           `json:"detail,omitempty" jsonschema:"brief (default): summary + critical/high facts + one-liners for the rest; full: every fact verbatim"`
+}
+
+var severityRank = map[string]int{"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+
+// briefFact is one upgrade-path fact compressed to what an agent decides on.
+// Evidence entities and URLs live one get_release call away.
+type briefFact struct {
+	FactID    int      `json:"fact_id"`
+	Version   string   `json:"version"`
+	FactType  string   `json:"fact_type"`
+	Severity  string   `json:"severity"`
+	Mandatory bool     `json:"mandatory,omitempty"`
+	Condition string   `json:"applies_if,omitempty"` // empty = applies unconditionally
+	Quote     string   `json:"quote,omitempty"`
+	IDs       []string `json:"ids,omitempty"`
+	AlsoIn    []string `json:"same_issue_also_addressed_in,omitempty"`
+}
+
+type briefSummary struct {
+	NewFacts       int            `json:"new_facts"`
+	DistinctIssues int            `json:"distinct_issues"`
+	Mandatory      int            `json:"mandatory"`
+	BySeverity     map[string]int `json:"by_severity"`
+	ByType         map[string]int `json:"by_type"`
 }
 
 type componentReport struct {
-	Project        string `json:"project"`
-	RunningVersion string `json:"running_version"`
-	Note           string `json:"note,omitempty"`
-	FactsScanned   int    `json:"facts_scanned"`
-	RelevantFacts  []Fact `json:"relevant_facts"`
+	Project        string        `json:"project"`
+	RunningVersion string        `json:"running_version"`
+	TargetVersion  string        `json:"target_version,omitempty"`
+	Note           string        `json:"note,omitempty"`
+	FactsScanned   int           `json:"facts_scanned"`
+	Summary        *briefSummary `json:"summary,omitempty"`
+	ActionRequired []briefFact   `json:"action_required,omitempty"`
+	OtherFacts     []briefFact   `json:"other_facts,omitempty"`
+	OtherOmitted   int           `json:"other_facts_omitted,omitempty"`
+	RelevantFacts  []Fact        `json:"relevant_facts,omitempty"` // detail:"full" only
 }
+
+// otherFactsCap bounds the one-liner tail of a brief report; whatever is cut
+// is counted in other_facts_omitted — never dropped silently.
+const otherFactsCap = 100
 
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
 	if len(args.Components) == 0 {
 		return errResult(fmt.Errorf("components is required")), nil, nil
 	}
+	minRank := 0
+	if args.SeverityMin != "" {
+		r, ok := severityRank[strings.ToLower(args.SeverityMin)]
+		if !ok {
+			return errResult(fmt.Errorf("severity_min must be one of info|low|medium|high|critical")), nil, nil
+		}
+		minRank = r
+	}
+	var full bool
+	switch strings.ToLower(args.Detail) {
+	case "", "brief":
+	case "full":
+		full = true
+	default:
+		return errResult(fmt.Errorf(`detail must be "brief" or "full"`)), nil, nil
+	}
+
 	reports := make([]componentReport, 0, len(args.Components))
 	for _, comp := range args.Components {
-		rep := componentReport{Project: comp.Project, RunningVersion: comp.Version, RelevantFacts: []Fact{}}
+		rep := componentReport{Project: comp.Project, RunningVersion: comp.Version, TargetVersion: comp.TargetVersion}
+		var notes []string
 		currentKey := version.NormalizeVersion(comp.Version)
 		if currentKey == nil {
 			rep.Note = "running version could not be parsed; showing no facts (use list_facts to inspect manually)"
 			reports = append(reports, rep)
 			continue
+		}
+		var targetKey []int
+		if comp.TargetVersion != "" {
+			if targetKey = version.NormalizeVersion(comp.TargetVersion); targetKey == nil {
+				notes = append(notes, "target_version could not be parsed; ignored")
+			}
 		}
 		facts, err := api.allProjectFacts(comp.Project)
 		if err != nil {
@@ -196,27 +265,128 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			continue
 		}
 		rep.FactsScanned = len(facts)
+
+		// Facts from releases strictly newer than the running version =
+		// the upgrade path the operator has not yet absorbed.
 		unparseable := 0
+		var relevant []Fact
+		var keys [][]int
 		for _, f := range facts {
 			factKey := version.NormalizeVersion(f.Version)
 			if factKey == nil {
 				unparseable++
 				continue
 			}
-			// Facts from releases strictly newer than the running version =
-			// the upgrade path the operator has not yet absorbed.
-			if version.Compare(factKey, currentKey) > 0 {
-				rep.RelevantFacts = append(rep.RelevantFacts, f)
+			if version.Compare(factKey, currentKey) <= 0 {
+				continue
 			}
+			if targetKey != nil && version.Compare(factKey, targetKey) > 0 {
+				continue
+			}
+			if severityRank[strings.ToLower(f.Severity)] < minRank {
+				continue
+			}
+			relevant = append(relevant, f)
+			keys = append(keys, factKey)
 		}
 		if unparseable > 0 {
-			rep.Note = fmt.Sprintf("%d fact(s) skipped (unparseable release tag)", unparseable)
+			notes = append(notes, fmt.Sprintf("%d fact(s) skipped (unparseable release tag)", unparseable))
+		}
+		rep.Note = strings.Join(notes, "; ")
+
+		if full {
+			rep.RelevantFacts = relevant
+			if rep.RelevantFacts == nil {
+				rep.RelevantFacts = []Fact{}
+			}
+			reports = append(reports, rep)
+			continue
+		}
+		rep.Summary, rep.ActionRequired, rep.OtherFacts = briefReport(relevant, keys)
+		if extra := len(rep.OtherFacts) - otherFactsCap; extra > 0 {
+			rep.OtherFacts = rep.OtherFacts[:otherFactsCap]
+			rep.OtherOmitted = extra
 		}
 		reports = append(reports, rep)
 	}
-	res, err := jsonResult(map[string]any{
+
+	out := map[string]any{
 		"components": reports,
 		"privacy":    "versions were compared locally; only project slugs were sent to the server",
-	})
+	}
+	if !full {
+		out["hint"] = "briefing: critical/high facts are in action_required, the rest one line each in other_facts; " +
+			"the same advisory fixed on several release branches is one entry (same_issue_also_addressed_in). " +
+			`Call again with detail:"full" for every fact verbatim, or drill down: get_release(project, version) ` +
+			"for one release with evidence and source URL, facts_by_entity(name) for one CVE/flag/CRD."
+	}
+	res, err := jsonResult(out)
 	return res, nil, err
+}
+
+// briefReport compresses the upgrade path: sorted by version, the same
+// issue_key on several branches collapsed into its earliest fix (an operator
+// upgrades once — the nearest release that fixes the issue is the actionable
+// one), then split into action_required (critical/high) and one-liner rest.
+func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []briefFact) {
+	idx := make([]int, len(relevant))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.Slice(idx, func(a, b int) bool {
+		if c := version.Compare(keys[idx[a]], keys[idx[b]]); c != 0 {
+			return c < 0
+		}
+		return relevant[idx[a]].FactID < relevant[idx[b]].FactID
+	})
+
+	sum := &briefSummary{
+		NewFacts:   len(relevant),
+		BySeverity: map[string]int{},
+		ByType:     map[string]int{},
+	}
+	byIssue := map[string]*briefFact{}
+	var ordered []*briefFact
+	for _, i := range idx {
+		f := relevant[i]
+		if f.IssueKey != "" {
+			if kept, ok := byIssue[f.IssueKey]; ok {
+				if f.Version != kept.Version && !slices.Contains(kept.AlsoIn, f.Version) {
+					kept.AlsoIn = append(kept.AlsoIn, f.Version)
+				}
+				continue
+			}
+		}
+		bf := &briefFact{
+			FactID:    f.FactID,
+			Version:   f.Version,
+			FactType:  f.FactType,
+			Severity:  f.Severity,
+			Mandatory: f.Mandatory,
+			Condition: f.Condition,
+			Quote:     f.Quote,
+			IDs:       f.RefIDs,
+		}
+		if f.IssueKey != "" {
+			byIssue[f.IssueKey] = bf
+		}
+		ordered = append(ordered, bf)
+		sum.BySeverity[f.Severity]++
+		sum.ByType[f.FactType]++
+		if f.Mandatory {
+			sum.Mandatory++
+		}
+	}
+	sum.DistinctIssues = len(ordered)
+
+	action := []briefFact{}
+	other := []briefFact{}
+	for _, bf := range ordered {
+		if r := severityRank[strings.ToLower(bf.Severity)]; r >= severityRank["high"] {
+			action = append(action, *bf)
+		} else {
+			other = append(other, *bf)
+		}
+	}
+	return sum, action, other
 }

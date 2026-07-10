@@ -37,7 +37,7 @@ This MCP server hands those facts to your agent as four tools.
 | `list_facts` | Incremental fact feed. Filter by `project`, `type`, `severity`; poll with the `since` cursor |
 | `facts_by_entity` | Reverse index: every fact touching one identifier (CVE id, CRD, feature gate, flag, config field, dependency) |
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. `facts: []` with `coverage: full_reviewed` means the release was read and is routine |
-| `check_stack` | Takes the component versions you run, returns the facts from newer releases: your upgrade path |
+| `check_stack` | Takes the component versions you run, returns a briefing on your upgrade path: critical/high facts in full, one line each for the rest, the same advisory across release branches folded into one entry. `detail: "full"` for everything verbatim, `target_version` for one upgrade hop, `severity_min` to filter |
 
 ## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> Your versions stay on your side
 

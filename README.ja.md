@@ -35,7 +35,7 @@
 | `list_facts` | 増分ファクトフィード。`project`・`type`・`severity` で絞り、`since` カーソルで続きを取得します |
 | `facts_by_entity` | 逆引きインデックス。CVE、CRD、フィーチャーゲート、フラグ、設定フィールド、依存関係など、識別子ひとつに触れるファクトをすべて返します |
 | `get_release` | レビュー済みリリース 1 件のカバレッジ・評価・原文リンク・全ファクト。`facts: []` かつ `coverage: full_reviewed` なら、読んだ上で平穏なリリースという意味です |
-| `check_stack` | 運用中のコンポーネントのバージョンを渡すと、それより新しいリリースのファクトを返します。つまりアップグレード経路です |
+| `check_stack` | 運用中のコンポーネントのバージョンを渡すと、アップグレード経路のブリーフィングを返します。critical/high は全文、残りは一行ずつ、複数ブランチで修正された同一イシューは一項目に畳みます。全件は `detail: "full"`、一段階のアップグレードだけなら `target_version`、深刻度フィルタは `severity_min` |
 
 ## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> バージョンは外に出ません
 
