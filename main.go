@@ -33,7 +33,12 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.2"}, &mcp.ServerOptions{
+		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
+			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
+			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +
+			"over polling list_facts per project.",
+	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
