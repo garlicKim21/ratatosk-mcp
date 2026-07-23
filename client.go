@@ -182,9 +182,14 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 	return out.Facts, nil
 }
 
+// getRelease fetches one reviewed release; an empty versionTag asks the server
+// for the project's latest reviewed release.
 func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (json.RawMessage, error) {
 	var raw json.RawMessage
-	path := "/v1/releases/" + url.PathEscape(project) + "/" + url.PathEscape(versionTag)
+	path := "/v1/releases/" + url.PathEscape(project)
+	if versionTag != "" {
+		path += "/" + url.PathEscape(versionTag)
+	}
 	var q url.Values
 	if includeRaw {
 		q = url.Values{"include": {"raw"}}

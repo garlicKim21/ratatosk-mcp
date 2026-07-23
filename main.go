@@ -33,7 +33,7 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.2.2"}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.0"}, &mcp.ServerOptions{
 		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
 			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +
@@ -59,6 +59,7 @@ func main() {
 		Name: "get_release",
 		Description: "One reviewed release: envelope (coverage, assessment, source URL) plus all its facts. " +
 			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence. " +
+			"Omit version for the latest reviewed release of the project. " +
 			"Set include_raw for the original release note body (raw_notes); when the review is not the full story " +
 			"(coverage insufficient, or zero facts) raw_notes is included automatically.",
 	}, getReleaseTool)
@@ -157,13 +158,13 @@ func factsByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args facts
 
 type getReleaseArgs struct {
 	Project    string `json:"project" jsonschema:"project slug, e.g. envoy"`
-	Version    string `json:"version" jsonschema:"release tag exactly as published, e.g. v1.38.3"`
+	Version    string `json:"version,omitempty" jsonschema:"release tag exactly as published, e.g. v1.38.3; omit for the latest reviewed release"`
 	IncludeRaw bool   `json:"include_raw,omitempty" jsonschema:"also return the original release note body as raw_notes — judge from the source instead of the extracted facts"`
 }
 
 func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getReleaseArgs) (*mcp.CallToolResult, any, error) {
-	if args.Project == "" || args.Version == "" {
-		return errResult(fmt.Errorf("project and version are required")), nil, nil
+	if args.Project == "" {
+		return errResult(fmt.Errorf("project is required")), nil, nil
 	}
 	raw, err := api.getRelease(args.Project, args.Version, args.IncludeRaw)
 	if err != nil {
