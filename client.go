@@ -199,3 +199,28 @@ func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (jso
 	}
 	return raw, nil
 }
+
+// projectTracked probes the version-less latest-release route (v0.3.0):
+// 200 = tracked project, 404 = unknown slug. check_stack uses it so zero
+// facts from an untracked project is never mistaken for audited silence.
+func (c *apiClient) projectTracked(project string) (bool, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/v1/releases/"+url.PathEscape(project), nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("User-Agent", "ratatosk-mcp/0.2")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("tracking probe: HTTP %d", resp.StatusCode)
+	}
+}

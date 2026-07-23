@@ -33,7 +33,7 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.0"}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.1"}, &mcp.ServerOptions{
 		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
 			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +
@@ -72,7 +72,10 @@ func main() {
 			"Default is a briefing: summary counts, critical/high facts in action_required, one line each for the rest, " +
 			"and the same advisory fixed on several release branches collapsed into one entry. " +
 			"Use detail:\"full\" for every fact verbatim, target_version to limit to one upgrade hop, " +
-			"severity_min to filter. Drill down with get_release or facts_by_entity.",
+			"severity_min to filter. Components with zero facts carry tracked:true|false — tracked:false means " +
+			"the project is NOT covered by ratatosk, so the absence of facts is no-coverage, not safety. " +
+			"In brief mode, facts sharing one quoted sentence are merged with their ids listed together. " +
+			"Drill down with get_release or facts_by_entity.",
 	}, checkStackTool)
 
 	// Two transports, one binary: stdio for local agents (Claude Code, MCP
@@ -200,6 +203,7 @@ type briefFact struct {
 	Severity  string   `json:"severity"`
 	Mandatory bool     `json:"mandatory,omitempty"`
 	Condition string   `json:"applies_if,omitempty"` // empty = applies unconditionally
+	ConditionsAny []string `json:"applies_if_any,omitempty"` // merged entry with diverging conditions
 	Quote     string   `json:"quote,omitempty"`
 	IDs       []string `json:"ids,omitempty"`
 	AlsoIn    []string `json:"same_issue_also_addressed_in,omitempty"`
@@ -217,6 +221,7 @@ type componentReport struct {
 	Project        string        `json:"project"`
 	RunningVersion string        `json:"running_version"`
 	TargetVersion  string        `json:"target_version,omitempty"`
+	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-fact components
 	Note           string        `json:"note,omitempty"`
 	FactsScanned   int           `json:"facts_scanned"`
 	Summary        *briefSummary `json:"summary,omitempty"`
@@ -274,6 +279,21 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			continue
 		}
 		rep.FactsScanned = len(facts)
+		// Zero facts is ambiguous: audited silence (tracked, routine releases)
+		// or no coverage at all (unknown slug). Probe and say which — an agent
+		// must never read "not tracked" as "safe" (2026-07-23 kagent finding).
+		if len(facts) == 0 {
+			if tracked, perr := api.projectTracked(comp.Project); perr != nil {
+				notes = append(notes, "tracking probe failed: "+perr.Error())
+			} else {
+				rep.Tracked = &tracked
+				if tracked {
+					notes = append(notes, "tracked by ratatosk; no facts on record — releases so far were routine")
+				} else {
+					notes = append(notes, "NOT tracked by ratatosk — zero facts means no coverage here, not safety")
+				}
+			}
+		}
 
 		// Facts from releases strictly newer than the running version =
 		// the upgrade path the operator has not yet absorbed.
@@ -325,6 +345,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 	}
 	if !full {
 		out["hint"] = "briefing: critical/high facts are in action_required, the rest one line each in other_facts; " +
+			"facts sharing one quoted sentence are merged (ids listed together, applies_if_any when conditions differ); " +
 			"the same advisory fixed on several release branches is one entry (same_issue_also_addressed_in). " +
 			`Call again with detail:"full" for every fact verbatim, or drill down: get_release(project, version) ` +
 			"for one release with evidence and source URL, facts_by_entity(name) for one CVE/flag/CRD."
@@ -408,7 +429,7 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 
 	action := []briefFact{}
 	other := []briefFact{}
-	for _, bf := range ordered {
+	for _, bf := range mergeSharedQuotes(ordered) {
 		if r := severityRank[strings.ToLower(bf.Severity)]; r >= severityRank["high"] {
 			action = append(action, *bf)
 		} else {
@@ -416,4 +437,55 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 		}
 	}
 	return sum, action, other
+}
+
+// mergeSharedQuotes folds brief entries that carry the same (version, quote):
+// one extraction sentence covering several ids is stored as one fact per id,
+// and brief mode must not repeat that sentence per id (observed live: envoy
+// v1.39.0 repeated one quote seven times). ids concatenate, severity shows the
+// strongest, and diverging applies_if conditions move to applies_if_any.
+// Quote-less entries are never merged. Summary counts stay per distinct issue —
+// this is presentation-level folding only.
+func mergeSharedQuotes(ordered []*briefFact) []*briefFact {
+	byQuote := map[string]*briefFact{}
+	out := make([]*briefFact, 0, len(ordered))
+	for _, bf := range ordered {
+		if bf.Quote == "" {
+			out = append(out, bf)
+			continue
+		}
+		k := bf.Version + "\x00" + bf.Quote
+		kept, ok := byQuote[k]
+		if !ok {
+			byQuote[k] = bf
+			out = append(out, bf)
+			continue
+		}
+		for _, id := range bf.IDs {
+			if !slices.Contains(kept.IDs, id) {
+				kept.IDs = append(kept.IDs, id)
+			}
+		}
+		for _, v := range bf.AlsoIn {
+			if !slices.Contains(kept.AlsoIn, v) {
+				kept.AlsoIn = append(kept.AlsoIn, v)
+			}
+		}
+		if severityRank[strings.ToLower(bf.Severity)] > severityRank[strings.ToLower(kept.Severity)] {
+			kept.Severity = bf.Severity
+		}
+		if bf.Mandatory {
+			kept.Mandatory = true
+		}
+		if bf.Condition != kept.Condition || len(kept.ConditionsAny) > 0 {
+			if kept.Condition != "" && !slices.Contains(kept.ConditionsAny, kept.Condition) {
+				kept.ConditionsAny = append(kept.ConditionsAny, kept.Condition)
+			}
+			if bf.Condition != "" && !slices.Contains(kept.ConditionsAny, bf.Condition) {
+				kept.ConditionsAny = append(kept.ConditionsAny, bf.Condition)
+			}
+			kept.Condition = ""
+		}
+	}
+	return out
 }

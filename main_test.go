@@ -86,3 +86,52 @@ func TestBriefReportAdvisoryGroupSeverity(t *testing.T) {
 		t.Errorf("mandatory: got %d, want 1 (any branch mandatory marks the issue)", sum.Mandatory)
 	}
 }
+
+// One extraction sentence covering several CVEs arrives as one fact per id
+// with an identical quote (observed live: envoy v1.39.0, same quote seven
+// times in a brief report). Brief mode merges them: ids together, strongest
+// severity, diverging applies_if collected into applies_if_any. Same quote on
+// a different version stays separate.
+func TestBriefReportMergesSharedQuotes(t *testing.T) {
+	q := "Security fixes were added for ext_authz (CVE-1), ext_proc (CVE-2)."
+	facts := []Fact{
+		{FactID: 466, Version: "v1.39.0", FactType: "security_fix", Severity: "medium", Mandatory: true,
+			IssueKey: "s1", Quote: q, Condition: "uses extension ext_authz", RefIDs: []string{"CVE-1"}},
+		{FactID: 467, Version: "v1.39.0", FactType: "security_fix", Severity: "high",
+			IssueKey: "s2", Quote: q, Condition: "uses extension ext_proc", RefIDs: []string{"CVE-2"}},
+		{FactID: 500, Version: "v1.38.9", FactType: "security_fix", Severity: "medium",
+			IssueKey: "s3", Quote: q, RefIDs: []string{"CVE-1"}},
+	}
+	keys := make([][]int, len(facts))
+	for i, f := range facts {
+		keys[i] = version.NormalizeVersion(f.Version)
+	}
+
+	sum, action, other := briefReport(facts, keys)
+
+	if sum.DistinctIssues != 3 {
+		t.Fatalf("summary stays per issue: got distinct=%d, want 3", sum.DistinctIssues)
+	}
+	if len(action)+len(other) != 2 {
+		t.Fatalf("want 2 rendered entries (v1.39.0 merged, v1.38.9 separate), got action=%d other=%d", len(action), len(other))
+	}
+	var merged *briefFact
+	for i := range action {
+		if action[i].Version == "v1.39.0" {
+			merged = &action[i]
+		}
+	}
+	if merged == nil {
+		t.Fatalf("merged v1.39.0 entry must sit in action_required at max severity high; action=%+v other=%+v", action, other)
+	}
+	if len(merged.IDs) != 2 || merged.IDs[0] != "CVE-1" || merged.IDs[1] != "CVE-2" {
+		t.Errorf("ids concatenated: got %v", merged.IDs)
+	}
+	if merged.Severity != "high" || !merged.Mandatory {
+		t.Errorf("merged entry: want strongest severity high + mandatory, got %s/%v", merged.Severity, merged.Mandatory)
+	}
+	if merged.Condition != "" || len(merged.ConditionsAny) != 2 {
+		t.Errorf("diverging conditions must move to applies_if_any: cond=%q any=%v", merged.Condition, merged.ConditionsAny)
+	}
+}
+
