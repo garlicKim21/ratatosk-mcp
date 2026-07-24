@@ -10,5 +10,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ratatosk-mcp .
 
 FROM gcr.io/distroless/static-debian12:nonroot
+# MCP Registry ownership verification — must equal server.json .name
+LABEL io.modelcontextprotocol.server.name="io.github.garlickim21/ratatosk-mcp"
 COPY --from=build /ratatosk-mcp /ratatosk-mcp
 ENTRYPOINT ["/ratatosk-mcp"]

@@ -1,0 +1,28 @@
+# Publish to the official MCP Registry on each GitHub Release.
+# Auth = GitHub Actions OIDC (namespace io.github.garlickim21).
+# server.json version/identifier are pinned to the release tag before publish.
+name: mcp-registry
+on:
+  release:
+    types: [published]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin server.json to the release tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" server.json
+          sed -i "s#ratatosk-mcp:[0-9][^\"]*#ratatosk-mcp:$V#" server.json
+          cat server.json
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" -o p.tgz \
+            || curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr A-Z a-z)_$(uname -m).tar.gz" -o p.tgz
+          tar xzf p.tgz mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.garlickim21/ratatosk-mcp",
+  "description": "CNCF release intelligence for agents: typed, quoted facts (security fixes, breaking changes, removals) from every graduated/incubating project's release notes, updated daily. check_stack compares running versions locally; versions never leave your process.",
+  "repository": {
+    "url": "https://github.com/garlicKim21/ratatosk-mcp",
+    "source": "github"
+  },
+  "version": "0.3.3",
+  "websiteUrl": "https://ratatosk.io",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/garlickim21/ratatosk-mcp:0.3.3",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}
