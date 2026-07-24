@@ -28,6 +28,6 @@ jobs:
           TAG: ${{ inputs.tag }}
       - name: Install mcp-publisher
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr A-Z a-z)_$(uname -m).tar.gz" | tar xz mcp-publisher
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish
