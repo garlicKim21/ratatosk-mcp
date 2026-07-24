@@ -1,5 +1,7 @@
 # Ratatosk MCP server
 
+[English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
+
 [Ratatosk](https://ratatosk.io) reads every CNCF graduated/incubating project's
 release notes daily and extracts typed facts — security fixes, breaking
 changes, removals, deprecations, default changes — each with a verbatim quote

@@ -50,92 +50,23 @@
 버전 정규화기(`internal/version`)를 함께 담아 범위 비교까지 클라이언트 쪽에서
 처리합니다.
 
-## 실행 방식 고르기
-
-| 당신은… | 방법 | 섹션 |
-| --- | --- | --- |
-| 노트북에서 Claude Code / Claude Desktop 등 stdio MCP 클라이언트 사용 | `docker run` (stdio) | [로컬](#로컬-stdio) |
-| 쿠버네티스에서 자체 에이전트 운용 (프레임워크 무관, CI 잡, SDK 클라이언트) | 헬름 차트 | [클러스터 단독](#클러스터-단독-helm) |
-| [kagent](https://kagent.dev) 사용 중 | `kagent.enabled=true` 헬름 옵션 또는 매니페스트 | [kagent와 함께](#kagent와-함께) |
-
-세 방식 모두 같은 바이너리로 같은 공개 API를 사용합니다. 어느 모드든 계정도
-API 키도 필요 없습니다.
-
-## 로컬 (stdio)
+## 빠른 시작
 
 ```bash
 claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:latest
 ```
 
-소스에서 빌드해 바이너리를 등록해도 됩니다:
+계정도 API 키도 필요 없습니다. 쿠버네티스에서 에이전트를 돌리거나 kagent를
+쓴다면 아래 설치 가이드를 보세요.
 
-```bash
-go build -o ratatosk-mcp .
-claude mcp add ratatosk -- /path/to/ratatosk-mcp
-```
+## 문서
 
-stdio를 지원하는 MCP 클라이언트라면 무엇이든 같은 방식입니다.
-
-## 클러스터 단독 (Helm)
-
-`MCP_HTTP_ADDR`를 설정하면 같은 바이너리가 `/mcp`에서 스트리밍 HTTP로 MCP를
-서빙합니다(`/healthz` 프로브 포함). 차트는 이를 ClusterIP Service로 배포해,
-클러스터 안의 무엇이든 프로세스를 띄우는 대신 URL로 접속합니다 — SDK로 만든
-자체 에이전트, 다른 에이전트 프레임워크, 업그레이드 전에 `check_stack`으로
-게이트를 거는 CI 잡까지:
-
-```bash
-git clone https://github.com/garlicKim21/ratatosk-mcp
-helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
-# → MCP 클라이언트를 http://ratatosk-mcp.<namespace>.svc:8080/mcp 로
-```
-
-업그레이드는 값을 유지한 채 `helm upgrade` 한 줄입니다. RBAC도 시크릿도
-필요 없고 PSS `restricted`에서 무경고로 돕니다.
-
-## kagent와 함께
-
-동등한 두 경로 중 하나만 고르세요:
-
-**A. 헬름 토글** — 설치 한 번에 서버, kagent 등록(RemoteMCPServer),
-예제 에이전트 `release-triage-agent`까지:
-
-```bash
-helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
-  --namespace kagent --set kagent.enabled=true
-```
-
-`kagent.modelConfig` 기본값은 `default-model-config`입니다. 환경이 다르면
-덮어쓰고, 예제 에이전트 없이 등록만 원하면 `kagent.agent.enabled=false`.
-
-**B. 매니페스트** — 같은 세 조각을 헬름 없이 복붙으로:
-
-```bash
-kubectl apply -f examples/kagent/ratatosk-deploy.yaml
-kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
-kubectl apply -f examples/kagent/ratatosk-agent.yaml
-```
-
-어느 쪽이든 kagent UI에 `release-triage-agent`가 나타납니다. 이렇게 물어보세요:
-
-> "kubernetes v1.36.0, cilium v1.17.18, envoy v1.38.3을 돌리는데,
-> 업그레이드 전에 조치할 게 있나요?"
-
-## 설정
-
-| 환경 변수 | 기본값 | |
-|---|---|---|
-| `RATATOSK_URL` | `https://ratatosk.io` | 업스트림 사실 API (`/v1`, 공개, 읽기 전용) |
-| `MCP_HTTP_ADDR` | *(비어 있음)* | 설정하면(예: `:8080`) stdio 대신 스트리밍 HTTP로 동작 |
-
-## 컨테이너 이미지
-
-멀티 아키텍처(`linux/amd64`, `linux/arm64`), 릴리스 태그마다 빌드합니다:
-
-```bash
-docker run -i ghcr.io/garlickim21/ratatosk-mcp:latest            # stdio
-docker run -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:latest
-```
+| | |
+| --- | --- |
+| **[설치와 사용법](docs/install.ko.md)** — 로컬 stdio · 클러스터(Helm) · kagent | [English](docs/install.en.md) · [日本語](docs/install.ja.md) |
+| **[헬름 차트](charts/ratatosk-mcp/README.ko.md)** — values, kagent 토글 | |
+| **[kagent 예제](examples/kagent/README.ko.md)** — 매니페스트 + release-triage 에이전트 | |
+| **[기여 안내](CONTRIBUTING.md)** · **[보안 정책](SECURITY.md)** | |
 
 ## 업스트림 API
 

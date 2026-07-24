@@ -25,14 +25,14 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# kagent 통합 (https://kagent.dev) — true면 RemoteMCPServer 등록과
-# release-triage 예제 Agent까지 함께 설치된다. kagent CRD가 있는
-# 클러스터에서만 켤 것.
+# kagent integration (https://kagent.dev) — when true, installs the
+# RemoteMCPServer registration and a release-triage example Agent alongside
+# the server. Enable only on clusters where the kagent CRDs exist.
 kagent:
   enabled: false
-  # kagent가 설치된 네임스페이스의 ModelConfig 이름
+  # Name of the ModelConfig in your kagent installation
   modelConfig: default-model-config
   agent:
-    # false면 RemoteMCPServer 등록까지만 하고 예제 Agent는 만들지 않는다
+    # false registers the server only, without the example Agent
     enabled: true
     name: release-triage-agent
