@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.garlickim21/ratatosk-mcp",
+  "name": "io.github.garlicKim21/ratatosk-mcp",
   "description": "CNCF release intelligence: typed facts from release notes; check_stack compares versions locally.",
   "repository": {
     "url": "https://github.com/garlicKim21/ratatosk-mcp",
