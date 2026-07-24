@@ -50,38 +50,78 @@
 エージェントが判断します。バージョン正規化器(`internal/version`)を同梱して
 いるので、範囲比較もクライアント側で済みます。
 
-## クイックスタート (stdio)
+## 実行方法を選ぶ
 
-```bash
-go build -o ratatosk-mcp .
+| あなたは… | 方法 | セクション |
+| --- | --- | --- |
+| ノートPCで Claude Code / Claude Desktop など stdio MCP クライアントを使う | `docker run`（stdio） | [ローカル](#ローカルstdio) |
+| Kubernetes で独自エージェントを運用（フレームワーク不問、CI ジョブ、SDK クライアント） | Helm チャート | [クラスタ内・単独](#クラスタ内単独helm) |
+| [kagent](https://kagent.dev) を使用中 | `kagent.enabled=true` の Helm オプション、またはマニフェスト | [kagent と一緒に](#kagent-と一緒に) |
 
-# Claude Code
-claude mcp add ratatosk -- /path/to/ratatosk-mcp
-```
+3 つの方法はすべて同じバイナリで同じ公開 API を使います。どのモードでも
+アカウントも API キーも不要です。
 
-ビルドせずコンテナイメージで:
+## ローカル（stdio）
 
 ```bash
 claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:latest
 ```
 
-## クラスター内 (ストリーミング HTTP + Helm)
-
-`MCP_HTTP_ADDR` を設定すると、同じバイナリが `/mcp` でストリーミング HTTP
-サーバーとして動作します。プローブ用の `/healthz` も開きます:
+ソースからビルドしてバイナリを登録することもできます:
 
 ```bash
-MCP_HTTP_ADDR=:8080 ./ratatosk-mcp
+go build -o ratatosk-mcp .
+claude mcp add ratatosk -- /path/to/ratatosk-mcp
 ```
 
-Helm チャートはこれを ClusterIP Service としてデプロイします。クラスター内の
-エージェント(kagent、カスタムオペレーター)は、プロセスを起動する代わりに URL
-へ接続します:
+stdio 対応の MCP クライアントならどれでも同じ方法です。
+
+## クラスタ内・単独（Helm）
+
+`MCP_HTTP_ADDR` を設定すると、同じバイナリが `/mcp` でストリーミング HTTP の
+MCP を提供します（`/healthz` プローブ付き）。チャートは ClusterIP Service
+として配備するため、クラスタ内の何からでもプロセス起動なしに URL で接続
+できます — SDK で作った独自エージェント、他のエージェントフレームワーク、
+アップグレード前に `check_stack` でゲートする CI ジョブなど:
 
 ```bash
-helm install ratatosk-mcp ./charts/ratatosk-mcp
-# → http://ratatosk-mcp.<namespace>.svc:8080/mcp
+git clone https://github.com/garlicKim21/ratatosk-mcp
+helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
+# → MCP クライアントを http://ratatosk-mcp.<namespace>.svc:8080/mcp へ
 ```
+
+アップグレードは値を保ったまま `helm upgrade` 一行です。RBAC もシークレットも
+不要で、PSS `restricted` でも警告なしで動きます。
+
+## kagent と一緒に
+
+同等の 2 つの経路から 1 つだけ選んでください:
+
+**A. Helm トグル** — 1 回のインストールでサーバー、kagent 登録
+（RemoteMCPServer）、サンプルの `release-triage-agent` まで:
+
+```bash
+helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
+  --namespace kagent --set kagent.enabled=true
+```
+
+`kagent.modelConfig` の既定は `default-model-config` です。環境が違う場合は
+上書きし、サンプルエージェントなしで登録だけしたい場合は
+`kagent.agent.enabled=false` にします。
+
+**B. マニフェスト** — 同じ 3 つの部品を Helm なしでそのまま適用:
+
+```bash
+kubectl apply -f examples/kagent/ratatosk-deploy.yaml
+kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
+kubectl apply -f examples/kagent/ratatosk-agent.yaml
+```
+
+どちらでも kagent UI に `release-triage-agent` が現れます。こう聞いてみて
+ください:
+
+> 「kubernetes v1.36.0、cilium v1.17.18、envoy v1.38.3 を運用中です。
+> アップグレード前に対応が必要なものはありますか？」
 
 ## 設定
 

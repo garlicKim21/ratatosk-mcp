@@ -2,6 +2,20 @@ ratatosk-mcp is up. In-cluster MCP endpoint (streamable HTTP):
 
   http://{{ include "ratatosk-mcp.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/mcp
 
-Point your in-cluster agent's MCP client at that URL. Versions you pass to
-check_stack are compared inside this pod — only project slugs reach
-{{ .Values.ratatoskUrl }}.
+{{- if .Values.kagent.enabled }}
+
+kagent integration is ON:
+  - RemoteMCPServer "{{ include "ratatosk-mcp.fullname" . }}" registered (5 tools discover automatically)
+{{- if .Values.kagent.agent.enabled }}
+  - Agent "{{ .Values.kagent.agent.name }}" installed — it appears in the kagent UI; try asking
+    which of your running component versions need action.
+{{- end }}
+{{- else }}
+
+Point any in-cluster MCP client at the URL above. Using kagent? Reinstall with
+--set kagent.enabled=true to add the RemoteMCPServer registration and an
+example release-triage agent.
+{{- end }}
+
+Versions passed to check_stack are compared inside this pod — only project
+slugs reach {{ .Values.ratatoskUrl }}.

@@ -52,43 +52,77 @@ server publishes facts; your agent decides what applies. The version
 normalizer is bundled (`internal/version`), so range comparison happens
 client-side too.
 
-## Quick start (stdio)
+## Choose how to run it
 
-```bash
-go build -o ratatosk-mcp .
+| You are… | Use | Section |
+| --- | --- | --- |
+| On a laptop, with Claude Code / Claude Desktop / any stdio MCP client | `docker run` (stdio) | [Local](#local-stdio) |
+| Running your own agents in Kubernetes (any framework, CI jobs, SDK clients) | Helm chart | [In-cluster, standalone](#in-cluster-standalone-helm) |
+| Using [kagent](https://kagent.dev) | Helm chart with `kagent.enabled=true`, or plain manifests | [With kagent](#with-kagent) |
 
-# Claude Code
-claude mcp add ratatosk -- /path/to/ratatosk-mcp
+All three run the same binary against the same public API. No account, no
+API key, in any mode.
 
-# or any MCP client over stdio
-```
-
-Or skip the build and use the container image:
+## Local (stdio)
 
 ```bash
 claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:latest
 ```
 
-## In-cluster (streamable HTTP + Helm)
+Or build from source and register the binary:
 
-Using [kagent](https://kagent.dev)? A ready-made integration — Deployment,
-RemoteMCPServer, and a release-triage example Agent — lives in
-[`examples/kagent/`](examples/kagent/).
+```bash
+go build -o ratatosk-mcp .
+claude mcp add ratatosk -- /path/to/ratatosk-mcp
+```
+
+Any MCP client that speaks stdio works the same way.
+
+## In-cluster, standalone (Helm)
 
 Set `MCP_HTTP_ADDR` and the same binary serves MCP over streamable HTTP at
-`/mcp`, with `/healthz` for probes:
+`/mcp`, with `/healthz` for probes. The chart deploys it as a ClusterIP
+Service so anything in the cluster connects to a URL instead of spawning a
+process — custom agents built on an SDK, other agent frameworks, or a CI job
+that gates upgrades on `check_stack`:
 
 ```bash
-MCP_HTTP_ADDR=:8080 ./ratatosk-mcp
+git clone https://github.com/garlicKim21/ratatosk-mcp
+helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
+# → point MCP clients at http://ratatosk-mcp.<namespace>.svc:8080/mcp
 ```
 
-The Helm chart deploys it as a ClusterIP Service, so in-cluster agents
-(kagent, custom operators) connect to a URL instead of spawning a process:
+Upgrades keep your values: `helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp`.
+No RBAC, no secrets; runs clean under PSS `restricted`.
+
+## With kagent
+
+Two equivalent routes — pick one, not both:
+
+**A. Helm toggle** — one install brings the server, the kagent registration
+(RemoteMCPServer), and a ready-made `release-triage-agent`:
 
 ```bash
-helm install ratatosk-mcp ./charts/ratatosk-mcp
-# → http://ratatosk-mcp.<namespace>.svc:8080/mcp
+helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
+  --namespace kagent --set kagent.enabled=true
 ```
+
+`kagent.modelConfig` defaults to `default-model-config`; override it if your
+kagent install names it differently. Set `kagent.agent.enabled=false` to
+register the server without the example agent.
+
+**B. Plain manifests** — the same three pieces as copy-paste files, no Helm:
+
+```bash
+kubectl apply -f examples/kagent/ratatosk-deploy.yaml
+kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
+kubectl apply -f examples/kagent/ratatosk-agent.yaml
+```
+
+Either way, `release-triage-agent` appears in the kagent UI. Ask it:
+
+> "We run kubernetes v1.36.0, cilium v1.17.18 and envoy v1.38.3 — anything
+> that needs action before we upgrade?"
 
 ## Configuration
 
