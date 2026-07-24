@@ -22,7 +22,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.enabled` | `false` | kagent 통합까지 함께 설치 (아래 참조) |
 | `kagent.modelConfig` | `default-model-config` | kagent 설치의 ModelConfig 이름 |
 | `kagent.agent.enabled` | `true` | 예제 에이전트 설치 (kagent.enabled일 때) |
-| `kagent.agent.name` | `release-triage-agent` | 예제 에이전트 이름 |
+| `kagent.agent.name` | `ratatosk-agent` | 예제 에이전트 이름 |
 
 ## kagent 통합
 
@@ -32,7 +32,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 `RemoteMCPServer`(kagent가 툴 5종을 자동 발견)와 준비된
-`release-triage-agent`가 추가됩니다. kagent CRD가 있는 클러스터에서만
+`ratatosk-agent`가 추가됩니다. kagent CRD가 있는 클러스터에서만
 켜세요. 헬름 없이 가려면 [`examples/kagent/`](../../examples/kagent/)를
 보세요.
 

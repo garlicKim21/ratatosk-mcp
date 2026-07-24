@@ -24,7 +24,7 @@ facts: security fixes, breaking changes, removals, deprecations, changed
 defaults. Plain bug fixes and marketing copy are filtered out. What remains is
 what an operator acts on.
 
-This MCP server hands those facts to your agent as four tools.
+This MCP server hands those facts to your agent as tools.
 
 ## What it feels like
 
@@ -41,6 +41,7 @@ This MCP server hands those facts to your agent as four tools.
 |---|---|
 | `list_facts` | Incremental fact feed. Filter by `project`, `type`, `severity`; poll with the `since` cursor |
 | `facts_by_entity` | Reverse index: every fact touching one identifier (CVE id, CRD, feature gate, flag, config field, dependency) |
+| `list_projects` | The tracked-project roster — resolve slugs here first, never guess |
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. Omit `version` for the latest reviewed release of the project. `facts: []` with `coverage: full_reviewed` means the release was read and is routine. `include_raw` adds the original note body (`raw_notes`) — automatic when the review is not the full story |
 | `check_stack` | Takes the component versions you run, returns a briefing on your upgrade path: critical/high facts in full, one line each for the rest, the same advisory across release branches folded into one entry. `detail: "full"` for everything verbatim, `target_version` for one upgrade hop, `severity_min` to filter |
 
@@ -67,7 +68,7 @@ See the install guide below.
 | --- | --- |
 | **[Install & usage](docs/install.en.md)** — local stdio · in-cluster (Helm) · kagent | [한국어](docs/install.ko.md) · [日本語](docs/install.ja.md) |
 | **[Helm chart](charts/ratatosk-mcp/README.md)** — values, kagent toggle | |
-| **[kagent example](examples/kagent/README.md)** — manifests + release-triage agent | |
+| **[kagent example](examples/kagent/README.md)** — manifests + ratatosk-agent | |
 | **[Contributing](CONTRIBUTING.md)** · **[Security policy](SECURITY.md)** | |
 
 ## Upstream API

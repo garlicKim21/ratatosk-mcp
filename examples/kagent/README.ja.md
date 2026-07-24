@@ -28,7 +28,7 @@
 ```bash
 kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service（RBAC 不要）
 kubectl apply -f ratatosk-remote-mcpserver.yaml  # kagent への登録
-kubectl apply -f ratatosk-agent.yaml             # 任意: release-triage サンプルエージェント
+kubectl apply -f ratatosk-agent.yaml             # 任意: サンプルエージェント ratatosk-agent
 ```
 
 Helm を使う場合は、チャートの kagent トグル 1 つで同じ構成になります:

@@ -23,7 +23,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.enabled` | `false` | kagent 統合も一緒にインストール（下記） |
 | `kagent.modelConfig` | `default-model-config` | kagent 側の ModelConfig 名 |
 | `kagent.agent.enabled` | `true` | サンプルエージェントの導入（kagent.enabled 時） |
-| `kagent.agent.name` | `release-triage-agent` | サンプルエージェント名 |
+| `kagent.agent.name` | `ratatosk-agent` | サンプルエージェント名 |
 
 ## kagent 統合
 
@@ -33,7 +33,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 `RemoteMCPServer`（kagent が 5 つのツールを自動発見）と、準備済みの
-`release-triage-agent` が追加されます。kagent CRD のあるクラスタでのみ
+`ratatosk-agent` が追加されます。kagent CRD のあるクラスタでのみ
 有効化してください。Helm を使わない場合は
 [`examples/kagent/`](../../examples/kagent/) を参照。
 

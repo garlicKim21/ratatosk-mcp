@@ -51,7 +51,7 @@ documented in the [chart README](../charts/ratatosk-mcp/README.md).
 Two equivalent routes — pick one, not both:
 
 **A. Helm toggle** — one install brings the server, the kagent registration
-(RemoteMCPServer), and a ready-made `release-triage-agent`:
+(RemoteMCPServer), and a ready-made `ratatosk-agent`:
 
 ```bash
 helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
@@ -71,7 +71,7 @@ kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
 kubectl apply -f examples/kagent/ratatosk-agent.yaml
 ```
 
-Either way, `release-triage-agent` appears in the kagent UI. Ask it:
+Either way, `ratatosk-agent` appears in the kagent UI. Ask it:
 
 > "We run kubernetes v1.36.0, cilium v1.17.18 and envoy v1.38.3 — anything
 > that needs action before we upgrade?"

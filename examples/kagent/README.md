@@ -27,7 +27,7 @@ credentials (rate limit 60 req/min per IP).
 ```bash
 kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service (no RBAC needed)
 kubectl apply -f ratatosk-remote-mcpserver.yaml  # register with kagent
-kubectl apply -f ratatosk-agent.yaml             # optional: release-triage example agent
+kubectl apply -f ratatosk-agent.yaml             # optional: the ratatosk-agent example agent
 ```
 
 Or with the Helm chart from the repository:

@@ -26,7 +26,7 @@ tolerations: []
 affinity: {}
 
 # kagent integration (https://kagent.dev) — when true, installs the
-# RemoteMCPServer registration and a release-triage example Agent alongside
+# RemoteMCPServer registration and an example Agent (ratatosk-agent) alongside
 # the server. Enable only on clusters where the kagent CRDs exist.
 kagent:
   enabled: false
@@ -35,4 +35,4 @@ kagent:
   agent:
     # false registers the server only, without the example Agent
     enabled: true
-    name: release-triage-agent
+    name: ratatosk-agent

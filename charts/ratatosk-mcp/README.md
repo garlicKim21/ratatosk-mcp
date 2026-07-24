@@ -22,7 +22,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.enabled` | `false` | Also install the kagent integration (below) |
 | `kagent.modelConfig` | `default-model-config` | ModelConfig name in your kagent install |
 | `kagent.agent.enabled` | `true` | Install the example agent (when kagent.enabled) |
-| `kagent.agent.name` | `release-triage-agent` | Example agent name |
+| `kagent.agent.name` | `ratatosk-agent` | Example agent name |
 
 ## kagent integration
 
@@ -32,7 +32,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 Adds a `RemoteMCPServer` (kagent discovers the five tools automatically) and a
-ready-made `release-triage-agent`. Enable only where the kagent CRDs exist.
+ready-made `ratatosk-agent`. Enable only where the kagent CRDs exist.
 Prefer plain manifests? See [`examples/kagent/`](../../examples/kagent/).
 
 ## Upgrades

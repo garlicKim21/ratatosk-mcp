@@ -23,7 +23,7 @@
 非推奨化、デフォルト値の変更といったファクトに整理します。ただのバグ修正や
 宣伝文句は除外。残るのは、運用者が対応すべきことだけです。
 
-この MCP サーバーは、そのファクトを 4 つのツールとしてエージェントに渡します。
+この MCP サーバーは、そのファクトをツールとしてエージェントに渡します。
 
 ## こんな使い方です
 
@@ -39,6 +39,7 @@
 |---|---|
 | `list_facts` | 増分ファクトフィード。`project`・`type`・`severity` で絞り、`since` カーソルで続きを取得します |
 | `facts_by_entity` | 逆引きインデックス。CVE、CRD、フィーチャーゲート、フラグ、設定フィールド、依存関係など、識別子ひとつに触れるファクトをすべて返します |
+| `list_projects` | 追跡プロジェクトの一覧。スラッグは推測せず、まずここで確認します |
 | `get_release` | レビュー済みリリース 1 件のカバレッジ・評価・原文リンク・全ファクト。`version` を省略すると、そのプロジェクトの最新レビュー済みリリースを返します。`facts: []` かつ `coverage: full_reviewed` なら、読んだ上で平穏なリリースという意味です。`include_raw` でリリースノート原文(`raw_notes`)も — 分析が不十分、またはファクト 0 件なら自動で含まれます |
 | `check_stack` | 運用中のコンポーネントのバージョンを渡すと、アップグレード経路のブリーフィングを返します。critical/high は全文、残りは一行ずつ、複数ブランチで修正された同一イシューは一項目に畳みます。全件は `detail: "full"`、一段階のアップグレードだけなら `target_version`、深刻度フィルタは `severity_min` |
 
@@ -65,7 +66,7 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:l
 | --- | --- |
 | **[インストールと使い方](docs/install.ja.md)** — ローカル stdio · クラスタ（Helm） · kagent | [English](docs/install.en.md) · [한국어](docs/install.ko.md) |
 | **[Helm チャート](charts/ratatosk-mcp/README.ja.md)** — values、kagent トグル | |
-| **[kagent サンプル](examples/kagent/README.ja.md)** — マニフェスト + release-triage エージェント | |
+| **[kagent サンプル](examples/kagent/README.ja.md)** — マニフェスト + ratatosk-agent | |
 | **[コントリビュート](CONTRIBUTING.md)** · **[セキュリティポリシー](SECURITY.md)** | |
 
 ## 上流 API

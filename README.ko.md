@@ -23,7 +23,7 @@
 체인지, 기능 제거, 지원 중단, 기본값 변경 같은 사실(fact) 단위로 정리합니다.
 단순 버그 수정과 홍보 문구는 걸러냅니다. 남는 것은 운영자가 조치할 내용뿐입니다.
 
-이 MCP 서버는 그 사실들을 4개의 도구로 에이전트에게 건넵니다.
+이 MCP 서버는 그 사실들을 도구로 에이전트에게 건넵니다.
 
 ## 이런 식으로 씁니다
 
@@ -39,6 +39,7 @@
 |---|---|
 | `list_facts` | 증분 사실 피드. `project`·`type`·`severity`로 거르고 `since` 커서로 이어받습니다 |
 | `facts_by_entity` | 역인덱스. CVE, CRD, 피처 게이트, 플래그, 설정 필드, 의존성 등 식별자 하나를 건드린 사실을 전부 찾습니다 |
+| `list_projects` | 추적 중인 프로젝트 전목록. 슬러그는 짐작하지 말고 먼저 여기서 확인합니다 |
 | `get_release` | 검토된 릴리스 한 건의 커버리지·평가·원문 링크·사실 전체. `version`을 생략하면 그 프로젝트의 최신 검토 릴리스를 돌려줍니다. `facts: []`에 `coverage: full_reviewed`면 읽어봤지만 평이한 릴리스라는 뜻입니다. `include_raw`면 패치노트 원문(`raw_notes`)까지 — 분석이 불충분하거나 사실이 0건이면 자동 포함됩니다 |
 | `check_stack` | 지금 쓰는 컴포넌트 버전을 주면 업그레이드 경로를 브리핑으로 돌려줍니다. critical/high는 전문, 나머지는 한 줄씩, 여러 브랜치에서 고쳐진 같은 이슈는 한 항목으로 접습니다. 전문 전체는 `detail: "full"`, 한 단계 업그레이드만은 `target_version`, 등급 필터는 `severity_min` |
 
@@ -65,7 +66,7 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:l
 | --- | --- |
 | **[설치와 사용법](docs/install.ko.md)** — 로컬 stdio · 클러스터(Helm) · kagent | [English](docs/install.en.md) · [日本語](docs/install.ja.md) |
 | **[헬름 차트](charts/ratatosk-mcp/README.ko.md)** — values, kagent 토글 | |
-| **[kagent 예제](examples/kagent/README.ko.md)** — 매니페스트 + release-triage 에이전트 | |
+| **[kagent 예제](examples/kagent/README.ko.md)** — 매니페스트 + ratatosk-agent | |
 | **[기여 안내](CONTRIBUTING.md)** · **[보안 정책](SECURITY.md)** | |
 
 ## 업스트림 API

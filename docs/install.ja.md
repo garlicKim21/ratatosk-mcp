@@ -51,7 +51,7 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 同等の 2 つの経路から 1 つだけ選んでください:
 
 **A. Helm トグル** — 1 回のインストールでサーバー、kagent 登録
-（RemoteMCPServer）、サンプルの `release-triage-agent` まで:
+（RemoteMCPServer）、サンプルの `ratatosk-agent` まで:
 
 ```bash
 helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
@@ -71,7 +71,7 @@ kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
 kubectl apply -f examples/kagent/ratatosk-agent.yaml
 ```
 
-どちらでも kagent UI に `release-triage-agent` が現れます。こう聞いてみて
+どちらでも kagent UI に `ratatosk-agent` が現れます。こう聞いてみて
 ください:
 
 > 「kubernetes v1.36.0、cilium v1.17.18、envoy v1.38.3 を運用中です。

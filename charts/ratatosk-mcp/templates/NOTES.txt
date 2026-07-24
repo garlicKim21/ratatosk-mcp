@@ -14,7 +14,7 @@ kagent integration is ON:
 
 Point any in-cluster MCP client at the URL above. Using kagent? Reinstall with
 --set kagent.enabled=true to add the RemoteMCPServer registration and an
-example release-triage agent.
+example agent (ratatosk-agent).
 {{- end }}
 
 Versions passed to check_stack are compared inside this pod — only project

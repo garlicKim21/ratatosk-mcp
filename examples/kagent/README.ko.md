@@ -27,7 +27,7 @@
 ```bash
 kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service (RBAC 불필요)
 kubectl apply -f ratatosk-remote-mcpserver.yaml  # kagent에 등록
-kubectl apply -f ratatosk-agent.yaml             # 선택: release-triage 예제 에이전트
+kubectl apply -f ratatosk-agent.yaml             # 선택: 예제 에이전트 ratatosk-agent
 ```
 
 헬름을 쓴다면 차트의 kagent 토글 하나로도 같은 구성이 됩니다:

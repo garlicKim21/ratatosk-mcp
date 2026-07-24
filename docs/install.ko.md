@@ -51,7 +51,7 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 동등한 두 경로 중 하나만 고르세요:
 
 **A. 헬름 토글** — 설치 한 번에 서버, kagent 등록(RemoteMCPServer),
-예제 에이전트 `release-triage-agent`까지:
+예제 에이전트 `ratatosk-agent`까지:
 
 ```bash
 helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
@@ -70,7 +70,7 @@ kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
 kubectl apply -f examples/kagent/ratatosk-agent.yaml
 ```
 
-어느 쪽이든 kagent UI에 `release-triage-agent`가 나타납니다. 이렇게 물어보세요:
+어느 쪽이든 kagent UI에 `ratatosk-agent`가 나타납니다. 이렇게 물어보세요:
 
 > "kubernetes v1.36.0, cilium v1.17.18, envoy v1.38.3을 돌리는데,
 > 업그레이드 전에 조치할 게 있나요?"
