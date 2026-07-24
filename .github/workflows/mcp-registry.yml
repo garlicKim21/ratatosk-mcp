@@ -15,9 +15,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # server.json은 main 것을 쓴다(스키마 수정이 태그 재발행 없이 반영되게);
+      # 버전·이미지 태그는 아래 pin 단계가 input 태그로 다시 쓴다.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
       - name: Pin server.json to the tag
         run: |
           V="${TAG#v}"
