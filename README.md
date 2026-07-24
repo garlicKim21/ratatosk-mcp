@@ -71,6 +71,10 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:l
 
 ## In-cluster (streamable HTTP + Helm)
 
+Using [kagent](https://kagent.dev)? A ready-made integration — Deployment,
+RemoteMCPServer, and a release-triage example Agent — lives in
+[`examples/kagent/`](examples/kagent/).
+
 Set `MCP_HTTP_ADDR` and the same binary serves MCP over streamable HTTP at
 `/mcp`, with `/healthz` for probes:
 
