@@ -44,7 +44,7 @@ This MCP server hands those facts to your agent as four tools.
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. Omit `version` for the latest reviewed release of the project. `facts: []` with `coverage: full_reviewed` means the release was read and is routine. `include_raw` adds the original note body (`raw_notes`) — automatic when the review is not the full story |
 | `check_stack` | Takes the component versions you run, returns a briefing on your upgrade path: critical/high facts in full, one line each for the rest, the same advisory across release branches folded into one entry. `detail: "full"` for everything verbatim, `target_version` for one upgrade hop, `severity_min` to filter |
 
-## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> Your versions stay on your side
+## Your versions stay on your side
 
 `check_stack` sends only project slugs to the server and compares version keys
 locally, inside this process. What you run never reaches ratatosk.io. The

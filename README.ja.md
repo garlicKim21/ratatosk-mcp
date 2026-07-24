@@ -42,7 +42,7 @@
 | `get_release` | レビュー済みリリース 1 件のカバレッジ・評価・原文リンク・全ファクト。`version` を省略すると、そのプロジェクトの最新レビュー済みリリースを返します。`facts: []` かつ `coverage: full_reviewed` なら、読んだ上で平穏なリリースという意味です。`include_raw` でリリースノート原文(`raw_notes`)も — 分析が不十分、またはファクト 0 件なら自動で含まれます |
 | `check_stack` | 運用中のコンポーネントのバージョンを渡すと、アップグレード経路のブリーフィングを返します。critical/high は全文、残りは一行ずつ、複数ブランチで修正された同一イシューは一項目に畳みます。全件は `detail: "full"`、一段階のアップグレードだけなら `target_version`、深刻度フィルタは `severity_min` |
 
-## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> バージョンは外に出ません
+## バージョンは外に出ません
 
 `check_stack` がサーバーへ送るのはプロジェクト名だけ。バージョンの比較はこの
 プロセスの中で完結します。何を運用しているかが ratatosk.io に届くことは

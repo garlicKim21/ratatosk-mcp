@@ -42,7 +42,7 @@
 | `get_release` | 검토된 릴리스 한 건의 커버리지·평가·원문 링크·사실 전체. `version`을 생략하면 그 프로젝트의 최신 검토 릴리스를 돌려줍니다. `facts: []`에 `coverage: full_reviewed`면 읽어봤지만 평이한 릴리스라는 뜻입니다. `include_raw`면 패치노트 원문(`raw_notes`)까지 — 분석이 불충분하거나 사실이 0건이면 자동 포함됩니다 |
 | `check_stack` | 지금 쓰는 컴포넌트 버전을 주면 업그레이드 경로를 브리핑으로 돌려줍니다. critical/high는 전문, 나머지는 한 줄씩, 여러 브랜치에서 고쳐진 같은 이슈는 한 항목으로 접습니다. 전문 전체는 `detail: "full"`, 한 단계 업그레이드만은 `target_version`, 등급 필터는 `severity_min` |
 
-## <img src="docs/assets/ratatosk-face.png" width="26" alt="" align="top"> 버전은 밖으로 나가지 않습니다
+## 버전은 밖으로 나가지 않습니다
 
 `check_stack`이 서버에 보내는 것은 프로젝트 이름뿐입니다. 버전 비교는 이
 프로세스 안에서 끝납니다. 무엇을 운영 중인지는 ratatosk.io에 닿지 않습니다.
