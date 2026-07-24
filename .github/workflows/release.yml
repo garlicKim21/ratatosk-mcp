@@ -5,6 +5,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 jobs:
   image:
     runs-on: ubuntu-latest
@@ -39,3 +40,26 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+  # Official MCP Registry publish — a separate release-triggered workflow can
+  # NOT do this: releases created with GITHUB_TOKEN never fire other workflows
+  # (recursion guard, learned 2026-07-24 v0.3.3). Runs after the image exists
+  # because the registry verifies the OCI label on the pushed image.
+  mcp-registry:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin server.json to the release tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" server.json
+          sed -i "s#ratatosk-mcp:[0-9][^\"]*#ratatosk-mcp:$V#" server.json
+          cat server.json
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr A-Z a-z)_$(uname -m).tar.gz" | tar xz mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish

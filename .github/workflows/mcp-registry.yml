@@ -1,10 +1,13 @@
-# Publish to the official MCP Registry on each GitHub Release.
-# Auth = GitHub Actions OIDC (namespace io.github.garlickim21).
-# server.json version/identifier are pinned to the release tag before publish.
+# Manual (re)publish to the official MCP Registry for an existing tag.
+# The automatic path lives in release.yml (job mcp-registry) — it must be a
+# job there because GITHUB_TOKEN-created releases never trigger workflows.
 name: mcp-registry
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing release tag, e.g. v0.3.3"
+        required: true
 permissions:
   id-token: write
   contents: read
@@ -13,16 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pin server.json to the release tag
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Pin server.json to the tag
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="${TAG#v}"
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" server.json
           sed -i "s#ratatosk-mcp:[0-9][^\"]*#ratatosk-mcp:$V#" server.json
           cat server.json
+        env:
+          TAG: ${{ inputs.tag }}
       - name: Install mcp-publisher
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" -o p.tgz \
-            || curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr A-Z a-z)_$(uname -m).tar.gz" -o p.tgz
-          tar xzf p.tgz mcp-publisher
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr A-Z a-z)_$(uname -m).tar.gz" | tar xz mcp-publisher
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish
