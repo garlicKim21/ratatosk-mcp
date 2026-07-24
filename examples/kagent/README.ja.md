@@ -39,6 +39,13 @@ helm install ratatosk-mcp ../../charts/ratatosk-mcp -n kagent --set kagent.enabl
 
 サンプルエージェントにこう聞いてみてください:
 
+> 「このクラスタでアップグレード前に対応が必要なものはありますか？」
+
+エージェントは kagent 内蔵の読み取り専用クラスタツール
+（`kagent-tool-server` の `k8s_get_resources`、`k8s_get_resource_yaml` —
+既定の kagent インストールに含まれます）で稼働中のバージョンを自力で
+見つけます。バージョンを直接伝えても構いません:
+
 > 「kubernetes v1.36.0、cilium v1.17.18、envoy v1.38.3 を運用中です。
 > アップグレード前に対応が必要なものはありますか？」
 

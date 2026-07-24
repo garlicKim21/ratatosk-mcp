@@ -23,6 +23,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.modelConfig` | `default-model-config` | kagent 설치의 ModelConfig 이름 |
 | `kagent.agent.enabled` | `true` | 예제 에이전트 설치 (kagent.enabled일 때) |
 | `kagent.agent.name` | `ratatosk-agent` | 예제 에이전트 이름 |
+| `kagent.agent.k8sTools` | `true` | kagent 내장 읽기 전용 클러스터 도구를 에이전트에 부여해 구동 버전을 스스로 파악 |
 
 ## kagent 통합
 
@@ -32,7 +33,10 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 `RemoteMCPServer`(kagent가 툴 5종을 자동 발견)와 준비된
-`ratatosk-agent`가 추가됩니다. kagent CRD가 있는 클러스터에서만
+`ratatosk-agent`가 추가됩니다. 에이전트에는 kagent 내장 읽기 전용
+클러스터 도구(`k8s_get_resources`, `k8s_get_resource_yaml`)도 붙어서
+구동 중인 버전을 스스로 알아냅니다 — 끄려면
+`kagent.agent.k8sTools=false`. kagent CRD가 있는 클러스터에서만
 켜세요. 헬름 없이 가려면 [`examples/kagent/`](../../examples/kagent/)를
 보세요.
 

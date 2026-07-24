@@ -39,6 +39,13 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp -n kagent
 
 Ask the example agent things like:
 
+> "Anything in this cluster that needs action before we upgrade?"
+
+The agent discovers running versions itself through kagent's built-in
+read-only cluster tools (`k8s_get_resources`, `k8s_get_resource_yaml` from
+`kagent-tool-server`, present in a default kagent install). You can also just
+tell it what you run:
+
 > "We run kubernetes v1.36.0, cilium v1.17.18 and envoy v1.38.3 — anything
 > that needs action before we upgrade?"
 

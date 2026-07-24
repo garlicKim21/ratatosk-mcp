@@ -38,6 +38,12 @@ helm install ratatosk-mcp ../../charts/ratatosk-mcp -n kagent --set kagent.enabl
 
 예제 에이전트에게 이렇게 물어보세요:
 
+> "이 클러스터에서 업그레이드 전에 조치할 게 있나요?"
+
+에이전트는 kagent 내장 읽기 전용 클러스터 도구(`kagent-tool-server`의
+`k8s_get_resources`, `k8s_get_resource_yaml` — 기본 kagent 설치에 포함)로
+구동 중인 버전을 스스로 알아냅니다. 버전을 직접 알려줘도 됩니다:
+
 > "kubernetes v1.36.0, cilium v1.17.18, envoy v1.38.3을 돌리는데,
 > 업그레이드 전에 조치할 게 있나요?"
 

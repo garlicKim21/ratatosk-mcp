@@ -36,3 +36,9 @@ kagent:
     # false registers the server only, without the example Agent
     enabled: true
     name: ratatosk-agent
+    # Grants the agent kagent's built-in read-only cluster tools
+    # (k8s_get_resources, k8s_get_resource_yaml) so it can discover running
+    # versions itself. Requires kagent-tool-server in the install namespace
+    # (present in a default kagent install). Set false to keep the agent
+    # cluster-blind; it will ask for versions instead.
+    k8sTools: true

@@ -23,6 +23,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.modelConfig` | `default-model-config` | ModelConfig name in your kagent install |
 | `kagent.agent.enabled` | `true` | Install the example agent (when kagent.enabled) |
 | `kagent.agent.name` | `ratatosk-agent` | Example agent name |
+| `kagent.agent.k8sTools` | `true` | Give the agent kagent's read-only cluster tools so it discovers running versions itself |
 
 ## kagent integration
 
@@ -32,7 +33,10 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 Adds a `RemoteMCPServer` (kagent discovers the five tools automatically) and a
-ready-made `ratatosk-agent`. Enable only where the kagent CRDs exist.
+ready-made `ratatosk-agent`. The agent also gets kagent's built-in read-only
+cluster tools (`k8s_get_resources`, `k8s_get_resource_yaml`) so it can find
+running versions on its own — turn this off with `kagent.agent.k8sTools=false`.
+Enable only where the kagent CRDs exist.
 Prefer plain manifests? See [`examples/kagent/`](../../examples/kagent/).
 
 ## Upgrades

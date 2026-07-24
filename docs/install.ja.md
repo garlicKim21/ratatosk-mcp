@@ -74,8 +74,11 @@ kubectl apply -f examples/kagent/ratatosk-agent.yaml
 どちらでも kagent UI に `ratatosk-agent` が現れます。こう聞いてみて
 ください:
 
-> 「kubernetes v1.36.0、cilium v1.17.18、envoy v1.38.3 を運用中です。
-> アップグレード前に対応が必要なものはありますか？」
+> 「このクラスタでアップグレード前に対応が必要なものはありますか？」
+
+エージェントは kagent 内蔵の読み取り専用クラスタツールで稼働バージョンを
+自力で見つけます（`kagent.agent.k8sTools=false` で無効化可能）。質問に
+バージョンを直接書いても構いません。
 
 ## 設定
 

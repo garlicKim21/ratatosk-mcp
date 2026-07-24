@@ -73,8 +73,11 @@ kubectl apply -f examples/kagent/ratatosk-agent.yaml
 
 Either way, `ratatosk-agent` appears in the kagent UI. Ask it:
 
-> "We run kubernetes v1.36.0, cilium v1.17.18 and envoy v1.38.3 — anything
-> that needs action before we upgrade?"
+> "Anything in this cluster that needs action before we upgrade?"
+
+The agent finds running versions itself via kagent's built-in read-only
+cluster tools (disable with `kagent.agent.k8sTools=false`), or you can name
+the versions in the question.
 
 ## Configuration
 

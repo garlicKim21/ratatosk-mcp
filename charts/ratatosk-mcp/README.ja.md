@@ -24,6 +24,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `kagent.modelConfig` | `default-model-config` | kagent 側の ModelConfig 名 |
 | `kagent.agent.enabled` | `true` | サンプルエージェントの導入（kagent.enabled 時） |
 | `kagent.agent.name` | `ratatosk-agent` | サンプルエージェント名 |
+| `kagent.agent.k8sTools` | `true` | kagent 内蔵の読み取り専用クラスタツールをエージェントに付与し、稼働バージョンを自力で把握 |
 
 ## kagent 統合
 
@@ -33,7 +34,10 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
 ```
 
 `RemoteMCPServer`（kagent が 5 つのツールを自動発見）と、準備済みの
-`ratatosk-agent` が追加されます。kagent CRD のあるクラスタでのみ
+`ratatosk-agent` が追加されます。エージェントには kagent 内蔵の
+読み取り専用クラスタツール（`k8s_get_resources`、`k8s_get_resource_yaml`）
+も付き、稼働中のバージョンを自力で見つけます — 無効化は
+`kagent.agent.k8sTools=false`。kagent CRD のあるクラスタでのみ
 有効化してください。Helm を使わない場合は
 [`examples/kagent/`](../../examples/kagent/) を参照。
 

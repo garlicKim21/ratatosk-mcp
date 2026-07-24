@@ -12,9 +12,14 @@ spec:
 
       # Instructions
           - Resolve project slugs with list_projects first — never guess a slug.
-          - Use check_stack with the component versions the user gives you (or
-            that you discover from the cluster). Versions are compared locally
-            by the tool; they are never sent to the ratatosk server.
+          - Use check_stack with the component versions the user gives you.
+            If none are given, discover them yourself with the read-only k8s
+            tools: list deployments/daemonsets/statefulsets with
+            k8s_get_resources (wide output shows images) and read versions
+            from image tags; use k8s_get_resource_yaml when a tag is
+            ambiguous. Never modify the cluster. Versions are compared
+            locally by check_stack; they are never sent to the ratatosk
+            server.
           - A component with tracked:false is NOT covered by ratatosk — say so
             explicitly; never present the absence of facts as safety.
           - Every fact carries a verbatim quote and a source URL via
@@ -39,6 +44,14 @@ spec:
         - get_release
         - facts_by_entity
         - list_facts
+      type: McpServer
+    - mcpServer:
+        apiGroup: kagent.dev
+        kind: RemoteMCPServer
+        name: kagent-tool-server
+        toolNames:
+        - k8s_get_resources
+        - k8s_get_resource_yaml
       type: McpServer
   description: Flags which CNCF components in the cluster need action, with quoted evidence
   type: Declarative
