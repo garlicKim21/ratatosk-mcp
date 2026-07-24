@@ -33,12 +33,20 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.1"}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.2"}, &mcp.ServerOptions{
 		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
 			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +
 			"over polling list_facts per project.",
 	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "list_projects",
+		Description: "Every project ratatosk tracks: slug (the canonical id all other tools take), name, " +
+			"tier (graduated|incubating), category, analyzed_releases. Small response, no arguments — " +
+			"call this FIRST when you are unsure of a slug instead of guessing (a wrong slug shows up " +
+			"as tracked:false in check_stack).",
+	}, listProjectsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
@@ -71,7 +79,8 @@ func main() {
 			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
 			"Default is a briefing: summary counts, critical/high facts in action_required, one line each for the rest, " +
 			"and the same advisory fixed on several release branches collapsed into one entry. " +
-			"Use detail:\"full\" for every fact verbatim, target_version to limit to one upgrade hop, " +
+			"Use detail:\"full\" for every fact verbatim (capped at 50 per component with relevant_facts_omitted — narrow with severity_min or target_version), " +
+			"target_version to limit to one upgrade hop, " +
 			"severity_min to filter. Components with zero facts carry tracked:true|false — tracked:false means " +
 			"the project is NOT covered by ratatosk, so the absence of facts is no-coverage, not safety. " +
 			"In brief mode, facts sharing one quoted sentence are merged with their ids listed together. " +
@@ -111,6 +120,20 @@ func errResult(err error) *mcp.CallToolResult {
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
 	}
+}
+
+// ---------------------------------------------------------------------------
+// list_projects
+// ---------------------------------------------------------------------------
+
+type listProjectsArgs struct{}
+
+func listProjectsTool(ctx context.Context, req *mcp.CallToolRequest, args listProjectsArgs) (*mcp.CallToolResult, any, error) {
+	raw, err := api.listProjects()
+	if err != nil {
+		return errResult(err), nil, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, nil, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -229,11 +252,18 @@ type componentReport struct {
 	OtherFacts     []briefFact   `json:"other_facts,omitempty"`
 	OtherOmitted   int           `json:"other_facts_omitted,omitempty"`
 	RelevantFacts  []Fact        `json:"relevant_facts,omitempty"` // detail:"full" only
+	RelevantOmitted int          `json:"relevant_facts_omitted,omitempty"`
 }
 
 // otherFactsCap bounds the one-liner tail of a brief report; whatever is cut
 // is counted in other_facts_omitted — never dropped silently.
 const otherFactsCap = 100
+
+// relevantFactsCap bounds a detail:"full" component — a long upgrade path can
+// otherwise be tens of thousands of tokens (observed: envoy v1.36.0→latest,
+// 75 facts ≈ 73 KB). The cut is counted in relevant_facts_omitted — never
+// silent; agents narrow with severity_min/target_version or drill down.
+const relevantFactsCap = 50
 
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
 	if len(args.Components) == 0 {
@@ -325,6 +355,10 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 
 		if full {
 			rep.RelevantFacts = relevant
+			if extra := len(rep.RelevantFacts) - relevantFactsCap; extra > 0 {
+				rep.RelevantFacts = rep.RelevantFacts[:relevantFactsCap]
+				rep.RelevantOmitted = extra
+			}
 			if rep.RelevantFacts == nil {
 				rep.RelevantFacts = []Fact{}
 			}

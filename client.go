@@ -224,3 +224,14 @@ func (c *apiClient) projectTracked(project string) (bool, error) {
 		return false, fmt.Errorf("tracking probe: HTTP %d", resp.StatusCode)
 	}
 }
+
+// listProjects fetches the tracked-project roster — the canonical slug list
+// agents resolve against before check_stack/get_release (v0.3.2 slug-discovery
+// gap fix: kagent guessed slugs and only learned via tracked:false).
+func (c *apiClient) listProjects() (json.RawMessage, error) {
+	var raw json.RawMessage
+	if err := c.get("/v1/projects", nil, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
