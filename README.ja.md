@@ -8,6 +8,11 @@
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-blue)](https://registry.modelcontextprotocol.io/?q=ratatosk&all=1)
+[![Release](https://img.shields.io/github/v/release/garlicKim21/ratatosk-mcp)](https://github.com/garlicKim21/ratatosk-mcp/releases)
+[![License](https://img.shields.io/github/license/garlicKim21/ratatosk-mcp)](LICENSE)
+
+
 </div>
 
 ---
