@@ -57,7 +57,10 @@ func main() {
 		Description: "Incremental feed of release facts (typed, entity-level changes: security fixes, " +
 			"removals, deprecations, renames, defaults) for CNCF/cloud-native projects. " +
 			"Ordered by fact_id ascending; poll with since=<last fact_id>. " +
-			"Call this to survey recent actionable changes, optionally filtered by project/type/severity.",
+			"Call this to survey recent actionable changes, optionally filtered by project/type/severity. " +
+			"Facts citing an upstream security advisory carry advisory_group_key (the official notice id, " +
+			"e.g. GHSA-… on GitHub) and group_severity — the maximum severity across all releases citing " +
+			"that advisory; prefer group_severity over the per-release severity when judging urgency.",
 	}, listFactsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -82,7 +85,8 @@ func main() {
 			"LOCALLY — only project slugs are sent to the ratatosk server, running versions never leave this process. " +
 			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
 			"Default is a briefing: summary counts, critical/high facts in action_required, one line each for the rest, " +
-			"and the same advisory fixed on several release branches collapsed into one entry. " +
+			"and the same advisory fixed on several release branches collapsed into one entry " +
+			"(shown at the advisory's group-maximum severity). " +
 			"Use detail:\"full\" for every fact verbatim (capped at 50 per component with relevant_facts_omitted — narrow with severity_min or target_version), " +
 			"target_version to limit to one upgrade hop, " +
 			"severity_min to filter. Components with zero facts carry tracked:true|false — tracked:false means " +
