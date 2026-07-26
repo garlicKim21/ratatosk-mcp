@@ -101,7 +101,7 @@ func (c *apiClient) get(path string, q url.Values, out any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "ratatosk-mcp/0.2")
+	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
@@ -208,7 +208,7 @@ func (c *apiClient) projectTracked(project string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("User-Agent", "ratatosk-mcp/0.2")
+	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return false, err

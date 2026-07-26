@@ -7,7 +7,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ratatosk-mcp .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.buildVersion=${VERSION}" -o /ratatosk-mcp .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 # MCP Registry ownership verification — must equal server.json .name

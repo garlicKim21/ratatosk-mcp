@@ -24,6 +24,10 @@ import (
 	"github.com/garlicKim21/ratatosk-mcp/internal/version"
 )
 
+// buildVersion is stamped by the release workflow via
+// -ldflags "-X main.buildVersion=<tag>"; local builds report "dev".
+var buildVersion = "dev"
+
 var api *apiClient
 
 func main() {
@@ -33,7 +37,7 @@ func main() {
 	}
 	api = newAPIClient(base)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: "0.3.4"}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: buildVersion}, &mcp.ServerOptions{
 		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
 			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +

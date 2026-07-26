@@ -25,6 +25,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           tags: |
             ghcr.io/garlickim21/ratatosk-mcp:${{ steps.meta.outputs.version }}
             ghcr.io/garlickim21/ratatosk-mcp:latest
