@@ -66,8 +66,8 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:l
 | | |
 | --- | --- |
 | **[インストールと使い方](docs/install.ja.md)** — ローカル stdio · クラスタ（Helm） · kagent | [English](docs/install.en.md) · [한국어](docs/install.ko.md) |
-| **[Helm チャート](charts/ratatosk-mcp/README.ja.md)** — values、kagent トグル | |
-| **[kagent サンプル](examples/kagent/README.ja.md)** — マニフェスト + ratatosk-agent | |
+| **[Helm チャート](charts/ratatosk-mcp/README.ja.md)** — values、kagent トグル | [English](charts/ratatosk-mcp/README.md) · [한국어](charts/ratatosk-mcp/README.ko.md) |
+| **[kagent サンプル](examples/kagent/README.ja.md)** — マニフェスト + ratatosk-agent | [English](examples/kagent/README.md) · [한국어](examples/kagent/README.ko.md) |
 | **[コントリビュート](CONTRIBUTING.md)** · **[セキュリティポリシー](SECURITY.md)** | |
 
 ## 上流 API

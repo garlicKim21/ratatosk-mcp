@@ -68,8 +68,8 @@ See the install guide below.
 | | |
 | --- | --- |
 | **[Install & usage](docs/install.en.md)** — local stdio · in-cluster (Helm) · kagent | [한국어](docs/install.ko.md) · [日本語](docs/install.ja.md) |
-| **[Helm chart](charts/ratatosk-mcp/README.md)** — values, kagent toggle | |
-| **[kagent example](examples/kagent/README.md)** — manifests + ratatosk-agent | |
+| **[Helm chart](charts/ratatosk-mcp/README.md)** — values, kagent toggle | [한국어](charts/ratatosk-mcp/README.ko.md) · [日本語](charts/ratatosk-mcp/README.ja.md) |
+| **[kagent example](examples/kagent/README.md)** — manifests + ratatosk-agent | [한국어](examples/kagent/README.ko.md) · [日本語](examples/kagent/README.ja.md) |
 | **[Contributing](CONTRIBUTING.md)** · **[Security policy](SECURITY.md)** | |
 
 ## Upstream API
