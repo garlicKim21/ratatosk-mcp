@@ -38,6 +38,11 @@ type Fact struct {
 	Mandatory bool            `json:"mandatory"`
 	IssueKey  string          `json:"issue_key"`
 	GroupKey  string          `json:"advisory_group_key"`
+	// GroupSeverity is the server's storage-layer maximum across every release
+	// sharing the advisory — broader than any locally visible fold (it includes
+	// branches outside the current query). Empty on facts without an advisory
+	// and on older servers.
+	GroupSeverity string `json:"group_severity"`
 	Quote     string          `json:"quote"`
 	RefIDs    []string        `json:"ids"`
 	Condition string          `json:"condition"` // applies_if as one phrase; "" = unconditional
@@ -52,8 +57,9 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 		FactType  string `json:"fact_type"`
 		Severity  string `json:"severity"`
 		Mandatory bool   `json:"mandatory"`
-		IssueKey  string `json:"issue_key"`
-		GroupKey  string `json:"advisory_group_key"`
+		IssueKey      string `json:"issue_key"`
+		GroupKey      string `json:"advisory_group_key"`
+		GroupSeverity string `json:"group_severity"`
 		AppliesIf struct {
 			Status     string `json:"status"`
 			Verb       string `json:"verb"`
@@ -72,7 +78,7 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 	}
 	f.FactID, f.Project, f.Version = a.FactID, a.Project, a.Version
 	f.FactType, f.Severity, f.Mandatory = a.FactType, a.Severity, a.Mandatory
-	f.IssueKey, f.GroupKey = a.IssueKey, a.GroupKey
+	f.IssueKey, f.GroupKey, f.GroupSeverity = a.IssueKey, a.GroupKey, a.GroupSeverity
 	f.Quote, f.RefIDs = a.References.Quote, a.References.IDs
 	switch a.AppliesIf.Status {
 	case "structured":
@@ -86,6 +92,15 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON re-emits the verbatim envelope the API returned.
 func (f Fact) MarshalJSON() ([]byte, error) { return f.Raw, nil }
+
+// EffSeverity is the severity check_stack reasons with: the server's advisory
+// group maximum when present, else the fact's own severity.
+func (f Fact) EffSeverity() string {
+	if f.GroupSeverity != "" {
+		return f.GroupSeverity
+	}
+	return f.Severity
+}
 
 type factsPage struct {
 	Facts     []Fact `json:"facts"`

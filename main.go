@@ -346,7 +346,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			if targetKey != nil && version.Compare(factKey, targetKey) > 0 {
 				continue
 			}
-			if severityRank[strings.ToLower(f.Severity)] < minRank {
+			if severityRank[strings.ToLower(f.EffSeverity())] < minRank {
 				continue
 			}
 			relevant = append(relevant, f)
@@ -430,7 +430,7 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 				if f.Version != kept.Version && !slices.Contains(kept.AlsoIn, f.Version) {
 					kept.AlsoIn = append(kept.AlsoIn, f.Version)
 				}
-				if severityRank[strings.ToLower(f.Severity)] > severityRank[strings.ToLower(kept.Severity)] {
+				if severityRank[strings.ToLower(f.EffSeverity())] > severityRank[strings.ToLower(kept.Severity)] {
 					kept.Severity = f.Severity
 				}
 				if f.Mandatory {
@@ -443,7 +443,7 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 			FactID:    f.FactID,
 			Version:   f.Version,
 			FactType:  f.FactType,
-			Severity:  f.Severity,
+			Severity:  f.EffSeverity(),
 			Mandatory: f.Mandatory,
 			Condition: f.Condition,
 			Quote:     f.Quote,
