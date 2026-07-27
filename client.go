@@ -204,7 +204,7 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 // getRelease fetches one reviewed release; an empty versionTag asks the server
 // for the project's latest reviewed release.
 // listReleases fetches the newest N reviewed releases of a project as light
-// summaries — the recency path (v0.3.7): list_facts is an oldest-first sync
+// summaries — the recency path (v0.4.0): list_facts is an oldest-first sync
 // feed, so "recent releases of X" questions must not be answered from it.
 func (c *apiClient) listReleases(project string, limit int) (json.RawMessage, error) {
 	var raw json.RawMessage

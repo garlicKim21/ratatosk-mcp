@@ -7,7 +7,33 @@ permissions:
   packages: write
   id-token: write
 jobs:
+  # The chart and the example manifests reach users as files in git — they clone
+  # the repo and `helm install` / `kubectl apply`. CI cannot paper over a stale
+  # version there the way it pins server.json below, because nobody consumes the
+  # CI copy. v0.4.0 shipped a chart still saying appVersion 0.3.6, and since
+  # image.tag defaults to appVersion, a plain `helm install` silently deployed
+  # the previous server. Fail the release before anything is published instead.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chart appVersion and pinned example images must match the tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          A="$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' charts/ratatosk-mcp/Chart.yaml)"
+          if [ "$A" != "$V" ]; then
+            echo "::error file=charts/ratatosk-mcp/Chart.yaml::appVersion is $A but the tag is $V — bump the chart before tagging"
+            exit 1
+          fi
+          # Anchored on the registry path: a bare `ratatosk-mcp:8080` is a
+          # service URL in the kagent example, not an image pin.
+          if STALE="$(grep -rn "ghcr.io/garlickim21/ratatosk-mcp:[0-9][^\"' ]*" charts examples | grep -v "ratatosk-mcp:$V")"; then
+            echo "::error::pinned image tags left behind: $STALE"
+            exit 1
+          fi
+          echo "chart appVersion=$A, pinned images all at $V"
   image:
+    needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +61,7 @@ jobs:
   # the server card again. Notes are commit-generated — edit the body after
   # publishing when a release deserves hand-written notes.
   github-release:
+    needs: preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
