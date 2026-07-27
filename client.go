@@ -128,7 +128,9 @@ func (c *apiClient) get(path string, q url.Values, out any) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: HTTP %d: %s", path, resp.StatusCode, truncate(string(body), 200))
+		// 400 chars so self-correcting errors survive intact — the /v1 404 now
+		// carries the project's recent reviewed tags for the agent to retry with.
+		return fmt.Errorf("%s: HTTP %d: %s", path, resp.StatusCode, truncate(string(body), 400))
 	}
 	return json.Unmarshal(body, out)
 }

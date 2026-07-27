@@ -54,10 +54,13 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
-		Description: "Incremental feed of release facts (typed, entity-level changes: security fixes, " +
+		Description: "Incremental SYNC feed of release facts (typed, entity-level changes: security fixes, " +
 			"removals, deprecations, renames, defaults) for CNCF/cloud-native projects. " +
-			"Ordered by fact_id ascending; poll with since=<last fact_id>. " +
-			"Call this to survey recent actionable changes, optionally filtered by project/type/severity. " +
+			"Ordered by fact_id ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
+			"page through with since=<returned next_since> until it stops growing. " +
+			"Built for keeping a local copy up to date. For 'what is the latest release of X' or " +
+			"'recent releases of X', use get_release (omit version for the newest) instead. " +
+			"Optionally filter by project/type/severity. " +
 			"Facts citing an upstream security advisory carry advisory_group_key (the official notice id, " +
 			"e.g. GHSA-… on GitHub; facts citing only CVE ids get a cve:… key) and group_severity — the " +
 			"maximum severity across all releases sharing that key; prefer group_severity over the " +
@@ -76,6 +79,8 @@ func main() {
 		Description: "One reviewed release: envelope (coverage, assessment, source URL) plus all its facts. " +
 			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence. " +
 			"Omit version for the latest reviewed release of the project. " +
+			"version is accepted with or without the leading 'v' (projects disagree on the spelling); " +
+			"a wrong tag returns an error listing the project's recent reviewed tags — retry with one of those. " +
 			"Set include_raw for the original release note body (raw_notes); when the review is not the full story " +
 			"(coverage insufficient, or zero facts) raw_notes is included automatically.",
 	}, getReleaseTool)
