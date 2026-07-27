@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -202,6 +203,18 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 
 // getRelease fetches one reviewed release; an empty versionTag asks the server
 // for the project's latest reviewed release.
+// listReleases fetches the newest N reviewed releases of a project as light
+// summaries — the recency path (v0.3.7): list_facts is an oldest-first sync
+// feed, so "recent releases of X" questions must not be answered from it.
+func (c *apiClient) listReleases(project string, limit int) (json.RawMessage, error) {
+	var raw json.RawMessage
+	q := url.Values{"limit": {strconv.Itoa(limit)}}
+	if err := c.get("/v1/releases/"+url.PathEscape(project), q, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (json.RawMessage, error) {
 	var raw json.RawMessage
 	path := "/v1/releases/" + url.PathEscape(project)

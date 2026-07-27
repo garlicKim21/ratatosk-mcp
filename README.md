@@ -44,6 +44,7 @@ This MCP server hands those facts to your agent as tools.
 | `facts_by_entity` | Reverse index: every fact touching one identifier (CVE id, CRD, feature gate, flag, config field, dependency) |
 | `list_projects` | The tracked-project roster — resolve slugs here first, never guess |
 | `get_release` | One reviewed release: coverage, assessment, source, and all its facts. Omit `version` for the latest reviewed release of the project. `facts: []` with `coverage: full_reviewed` means the release was read and is routine. `include_raw` adds the original note body (`raw_notes`) — automatic when the review is not the full story |
+| `list_releases` | The newest N reviewed releases of one project as light summaries (fact counts by severity, max advisory-group severity), newest first — the tool for "recent releases of X". Drill into a row with `get_release` |
 | `check_stack` | Takes the component versions you run, returns a briefing on your upgrade path: critical/high facts in full, one line each for the rest, the same advisory across release branches folded into one entry. `detail: "full"` for everything verbatim, `target_version` for one upgrade hop, `severity_min` to filter |
 
 ## Your versions stay on your side

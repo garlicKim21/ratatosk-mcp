@@ -86,6 +86,16 @@ func main() {
 	}, getReleaseTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name: "list_releases",
+		Description: "The newest N reviewed releases of one project, as light summaries (version, date, " +
+			"coverage, fact counts by severity, max advisory-group severity). THE tool for " +
+			"'recent releases of X' / 'what changed in X lately' — newest first, unlike the " +
+			"list_facts sync feed which returns oldest-analyzed first. facts_total=0 with " +
+			"coverage=full_reviewed means the release was read and is routine (auditable silence). " +
+			"Drill into a row with get_release(project, version) for the full facts.",
+	}, listReleasesTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "check_stack",
 		Description: "Check the user's running component versions against known facts. Versions are compared " +
 			"LOCALLY — only project slugs are sent to the ratatosk server, running versions never leave this process. " +
@@ -195,6 +205,29 @@ func factsByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args facts
 // ---------------------------------------------------------------------------
 // get_release
 // ---------------------------------------------------------------------------
+
+type listReleasesArgs struct {
+	Project string `json:"project" jsonschema:"project slug, e.g. istio"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"how many recent releases, default 5, max 20"`
+}
+
+func listReleasesTool(ctx context.Context, req *mcp.CallToolRequest, args listReleasesArgs) (*mcp.CallToolResult, any, error) {
+	if args.Project == "" {
+		return errResult(fmt.Errorf("project is required")), nil, nil
+	}
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	raw, err := api.listReleases(args.Project, limit)
+	if err != nil {
+		return errResult(err), nil, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, nil, nil
+}
 
 type getReleaseArgs struct {
 	Project    string `json:"project" jsonschema:"project slug, e.g. envoy"`
