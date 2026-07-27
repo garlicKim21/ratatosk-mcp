@@ -39,9 +39,10 @@ type Fact struct {
 	IssueKey  string          `json:"issue_key"`
 	GroupKey  string          `json:"advisory_group_key"`
 	// GroupSeverity is the server's storage-layer maximum across every release
-	// sharing the advisory — broader than any locally visible fold (it includes
-	// branches outside the current query). Empty on facts without an advisory
-	// and on older servers.
+	// sharing the group key (an advisory id, or a CVE id when no advisory is
+	// cited) — broader than any locally visible fold (it includes branches
+	// outside the current query). Empty on facts with neither id and on older
+	// servers.
 	GroupSeverity string `json:"group_severity"`
 	Quote     string          `json:"quote"`
 	RefIDs    []string        `json:"ids"`

@@ -59,8 +59,9 @@ func main() {
 			"Ordered by fact_id ascending; poll with since=<last fact_id>. " +
 			"Call this to survey recent actionable changes, optionally filtered by project/type/severity. " +
 			"Facts citing an upstream security advisory carry advisory_group_key (the official notice id, " +
-			"e.g. GHSA-… on GitHub) and group_severity — the maximum severity across all releases citing " +
-			"that advisory; prefer group_severity over the per-release severity when judging urgency.",
+			"e.g. GHSA-… on GitHub; facts citing only CVE ids get a cve:… key) and group_severity — the " +
+			"maximum severity across all releases sharing that key; prefer group_severity over the " +
+			"per-release severity when judging urgency.",
 	}, listFactsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
