@@ -63,8 +63,8 @@ func main() {
 			"Optionally filter by project/type/severity. " +
 			"Facts citing an upstream security advisory carry advisory_group_key (the official notice id, " +
 			"e.g. GHSA-… on GitHub; facts citing only CVE ids get a cve:… key) and group_severity — the " +
-			"maximum severity across all releases sharing that key; prefer group_severity over the " +
-			"per-release severity when judging urgency.",
+			"maximum severity across all releases sharing that key — the group-maximum reading, " +
+			"with per-release severity as the per-release evidence.",
 	}, listFactsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
