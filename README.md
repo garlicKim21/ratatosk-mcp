@@ -55,6 +55,11 @@ server publishes facts; your agent decides what applies. The version
 normalizer is bundled (`internal/version`), so range comparison happens
 client-side too.
 
+This holds for upgrade questions as well: the upstream API has a convenience
+endpoint (`/v1/upgrade`) that receives caller-supplied versions — **check_stack
+never calls it and never will**. Upgrade-path comparison stays in this process,
+guaranteed by code you can read, not by configuration.
+
 ## Quick start
 
 ```bash
