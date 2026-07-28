@@ -19,16 +19,21 @@ credentials (rate limit 60 req/min per IP).
 | `list_projects` | The tracked-project roster — resolve slugs here first |
 | `check_stack` | Compare running versions against known facts (local comparison) |
 | `get_release` | One reviewed release with all facts and the source URL |
+| `list_releases` | The newest N releases of one project as light summaries, newest first |
 | `facts_by_entity` | Reverse index: every fact touching one CVE/flag/CRD |
 | `list_facts` | Incremental fact feed with a `since` cursor |
 
 ## Install
 
 ```bash
-kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service (no RBAC needed)
-kubectl apply -f ratatosk-remote-mcpserver.yaml  # register with kagent
-kubectl apply -f ratatosk-agent.yaml             # optional: the ratatosk-agent example agent
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml            # Deployment + Service (no RBAC needed)
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml  # register with kagent
+kubectl apply -f $BASE/ratatosk-agent.yaml             # optional: the ratatosk-agent example agent
 ```
+
+The manifests carry `namespace: kagent`. Applying local copies works the same
+from this directory.
 
 Or with the Helm chart from the repository:
 

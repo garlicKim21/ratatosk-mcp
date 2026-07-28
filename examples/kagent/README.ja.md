@@ -20,16 +20,21 @@
 | `list_projects` | 追跡プロジェクトの一覧 — スラッグはまずここで確認 |
 | `check_stack` | 稼働中バージョンを既知のファクトと照合（ローカル比較） |
 | `get_release` | レビュー済みリリース 1 件: 全ファクトとソース URL |
+| `list_releases` | プロジェクト 1 件の最新リリース N 件のサマリーを新しい順で |
 | `facts_by_entity` | 逆引き: 1 つの CVE/フラグ/CRD に触れた全ファクト |
 | `list_facts` | `since` カーソルでの増分ファクトフィード |
 
 ## インストール
 
 ```bash
-kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service（RBAC 不要）
-kubectl apply -f ratatosk-remote-mcpserver.yaml  # kagent への登録
-kubectl apply -f ratatosk-agent.yaml             # 任意: サンプルエージェント ratatosk-agent
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml            # Deployment + Service（RBAC 不要）
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml  # kagent への登録
+kubectl apply -f $BASE/ratatosk-agent.yaml             # 任意: サンプルエージェント ratatosk-agent
 ```
+
+マニフェストには `namespace: kagent` が入っています。このディレクトリからローカル
+ファイルを適用しても同じです。
 
 Helm を使う場合は、チャートの kagent トグル 1 つで同じ構成になります:
 

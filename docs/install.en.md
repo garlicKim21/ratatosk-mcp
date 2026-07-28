@@ -66,10 +66,13 @@ register the server without the example agent.
 ([details](../examples/kagent/README.md)):
 
 ```bash
-kubectl apply -f examples/kagent/ratatosk-deploy.yaml
-kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
-kubectl apply -f examples/kagent/ratatosk-agent.yaml
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml
+kubectl apply -f $BASE/ratatosk-agent.yaml
 ```
+
+No clone needed for this route. The manifests carry `namespace: kagent`.
 
 Either way, `ratatosk-agent` appears in the kagent UI. Ask it:
 

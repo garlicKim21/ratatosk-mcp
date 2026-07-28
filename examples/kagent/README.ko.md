@@ -19,16 +19,21 @@
 | `list_projects` | 추적 프로젝트 전목록 — 슬러그는 먼저 여기서 확인 |
 | `check_stack` | 실행 중 버전을 알려진 팩트와 대조 (로컬 비교) |
 | `get_release` | 리뷰된 릴리스 하나: 전체 팩트와 소스 URL |
+| `list_releases` | 프로젝트 하나의 최근 릴리스 N건 요약을 최신순으로 |
 | `facts_by_entity` | 역인덱스: 하나의 CVE/플래그/CRD를 건드린 모든 팩트 |
 | `list_facts` | `since` 커서로 증분 팩트 피드 |
 
 ## 설치
 
 ```bash
-kubectl apply -f ratatosk-deploy.yaml            # Deployment + Service (RBAC 불필요)
-kubectl apply -f ratatosk-remote-mcpserver.yaml  # kagent에 등록
-kubectl apply -f ratatosk-agent.yaml             # 선택: 예제 에이전트 ratatosk-agent
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml            # Deployment + Service (RBAC 불필요)
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml  # kagent에 등록
+kubectl apply -f $BASE/ratatosk-agent.yaml             # 선택: 예제 에이전트 ratatosk-agent
 ```
+
+매니페스트에는 `namespace: kagent`가 들어 있습니다. 이 디렉토리에서 로컬 파일로
+적용해도 동일합니다.
 
 헬름을 쓴다면 차트의 kagent 토글 하나로도 같은 구성이 됩니다:
 

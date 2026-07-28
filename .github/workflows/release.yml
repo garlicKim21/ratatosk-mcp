@@ -56,12 +56,24 @@ jobs:
           tags: |
             ghcr.io/garlickim21/ratatosk-mcp:${{ steps.meta.outputs.version }}
             ghcr.io/garlickim21/ratatosk-mcp:latest
+  # The release rehearsal, against the image this tag just built: install every
+  # documented path on a throwaway cluster and assert the running server serves
+  # this version with every registered tool. The GitHub Release and the registry
+  # publish wait on it — a tag that cannot be installed should not be announced.
+  smoke:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+      - uses: azure/setup-helm@v4
+      - run: ./scripts/chart-smoke.sh "${GITHUB_REF_NAME#v}"
   # Tag push alone must leave every version surface consistent: the GitHub
   # Release ("Latest") is created here so it cannot lag behind the image and
   # the server card again. Notes are commit-generated — edit the body after
   # publishing when a release deserves hand-written notes.
   github-release:
-    needs: preflight
+    needs: smoke
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -74,7 +86,7 @@ jobs:
   # (recursion guard, learned 2026-07-24 v0.3.3). Runs after the image exists
   # because the registry verifies the OCI label on the pushed image.
   mcp-registry:
-    needs: image
+    needs: smoke
     runs-on: ubuntu-latest
     permissions:
       id-token: write

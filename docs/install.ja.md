@@ -66,10 +66,13 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
 （[詳細](../examples/kagent/README.ja.md)）:
 
 ```bash
-kubectl apply -f examples/kagent/ratatosk-deploy.yaml
-kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
-kubectl apply -f examples/kagent/ratatosk-agent.yaml
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml
+kubectl apply -f $BASE/ratatosk-agent.yaml
 ```
+
+この経路にクローンは不要です。マニフェストには `namespace: kagent` が入っています。
 
 どちらでも kagent UI に `ratatosk-agent` が現れます。こう聞いてみて
 ください:

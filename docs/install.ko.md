@@ -65,10 +65,13 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
 ([상세](../examples/kagent/README.ko.md)):
 
 ```bash
-kubectl apply -f examples/kagent/ratatosk-deploy.yaml
-kubectl apply -f examples/kagent/ratatosk-remote-mcpserver.yaml
-kubectl apply -f examples/kagent/ratatosk-agent.yaml
+BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
+kubectl apply -f $BASE/ratatosk-deploy.yaml
+kubectl apply -f $BASE/ratatosk-remote-mcpserver.yaml
+kubectl apply -f $BASE/ratatosk-agent.yaml
 ```
+
+이 경로는 클론이 필요 없습니다. 매니페스트에는 `namespace: kagent`가 들어 있습니다.
 
 어느 쪽이든 kagent UI에 `ratatosk-agent`가 나타납니다. 이렇게 물어보세요:
 

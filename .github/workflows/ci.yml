@@ -32,3 +32,16 @@ jobs:
               exit 1
             fi
           done
+
+  # The static check above compares files. This one installs the chart on a real
+  # cluster and asks the running server what it serves — the step whose absence
+  # let v0.4.0 ship a chart pinned to the previous image with a tool the agent
+  # could not call. Runs against the chart's appVersion, which is always an
+  # already-published image on main.
+  chart-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+      - uses: azure/setup-helm@v4
+      - run: ./scripts/chart-smoke.sh
