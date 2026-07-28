@@ -101,7 +101,11 @@ func main() {
 			"LOCALLY — only project slugs are sent to the ratatosk server, running versions never leave this process " +
 			"(this tool never calls the server-side /v1/upgrade endpoint). " +
 			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
-			"Default is a briefing: summary counts, critical/high facts in action_required, one line each for the rest, " +
+			"Default is a briefing: summary counts, then critical/high facts split by whether the caller still has to " +
+			"check something — action_required applies to everyone, check_config applies only if its applies_if holds " +
+			"against the running configuration (resolve it before recommending; an unmet condition is not a reason to " +
+			"upgrade, it is a precondition for later — fixed_in is the minimum version to be on before enabling that " +
+			"feature). One line each for the rest, " +
 			"and the same advisory fixed on several release branches collapsed into one entry " +
 			"(shown at the advisory's group-maximum severity). " +
 			"Use detail:\"full\" for every fact verbatim (capped at 50 per component with relevant_facts_omitted — narrow with severity_min or target_version), " +
@@ -275,10 +279,29 @@ type briefFact struct {
 	Mandatory bool     `json:"mandatory,omitempty"`
 	Condition string   `json:"applies_if,omitempty"` // empty = applies unconditionally
 	ConditionsAny []string `json:"applies_if_any,omitempty"` // merged entry with diverging conditions
+	// Target names the thing the condition is about, when the server stored it
+	// structurally — an agent greps a live config for this instead of reading
+	// the phrase. Absent when applies_if is only a sentence.
+	Target *conditionTarget `json:"applies_if_target,omitempty"`
+	// FixedIn is the minimum version that closes this issue: the answer to
+	// "before I turn that feature on, what do I need?" — which is the useful
+	// form of a fact whose condition the stack does not meet today.
+	FixedIn      string   `json:"fixed_in,omitempty"`
+	RemovedIn    string   `json:"removed_in,omitempty"`
+	DeprecatedIn string   `json:"deprecated_in,omitempty"`
 	Quote     string   `json:"quote,omitempty"`
 	IDs       []string `json:"ids,omitempty"`
 	AlsoIn    []string `json:"same_issue_also_addressed_in,omitempty"`
 }
+
+type conditionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// conditional reports whether this entry carries a condition an agent still
+// has to resolve against the running configuration.
+func (b briefFact) conditional() bool { return b.Condition != "" || len(b.ConditionsAny) > 0 }
 
 type briefSummary struct {
 	NewFacts       int            `json:"new_facts"`
@@ -297,6 +320,7 @@ type componentReport struct {
 	FactsScanned   int           `json:"facts_scanned"`
 	Summary        *briefSummary `json:"summary,omitempty"`
 	ActionRequired []briefFact   `json:"action_required,omitempty"`
+	CheckConfig    []briefFact   `json:"check_config,omitempty"`
 	OtherFacts     []briefFact   `json:"other_facts,omitempty"`
 	OtherOmitted   int           `json:"other_facts_omitted,omitempty"`
 	RelevantFacts  []Fact        `json:"relevant_facts,omitempty"` // detail:"full" only
@@ -413,7 +437,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			reports = append(reports, rep)
 			continue
 		}
-		rep.Summary, rep.ActionRequired, rep.OtherFacts = briefReport(relevant, keys)
+		rep.Summary, rep.ActionRequired, rep.CheckConfig, rep.OtherFacts = briefReport(relevant, keys)
 		if extra := len(rep.OtherFacts) - otherFactsCap; extra > 0 {
 			rep.OtherFacts = rep.OtherFacts[:otherFactsCap]
 			rep.OtherOmitted = extra
@@ -426,9 +450,14 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		"privacy":    "versions were compared locally; only project slugs were sent to the server",
 	}
 	if !full {
-		out["hint"] = "briefing: critical/high facts are in action_required, the rest one line each in other_facts; " +
-			"facts sharing one quoted sentence are merged (ids listed together, applies_if_any when conditions differ); " +
-			"the same advisory fixed on several release branches is one entry (same_issue_also_addressed_in). " +
+		out["hint"] = "briefing: action_required = critical/high that applies to every install of this version. " +
+			"check_config = critical/high that applies ONLY IF applies_if holds — read the running configuration and " +
+			"decide before you recommend anything; an unmet condition is not an upgrade reason. Report an unmet one " +
+			"forward instead: fixed_in is the minimum version to be on BEFORE enabling what applies_if describes. " +
+			"applies_if_target names the thing to look for when the server stored it structurally. The rest is one " +
+			"line each in other_facts; facts sharing one quoted sentence are merged (ids listed together, " +
+			"applies_if_any when conditions differ); the same advisory fixed on several release branches is one " +
+			"entry (same_issue_also_addressed_in). " +
 			`Call again with detail:"full" for every fact verbatim, or drill down: get_release(project, version) ` +
 			"for one release with evidence and source URL, facts_by_entity(name) for one CVE/flag/CRD."
 	}
@@ -440,11 +469,15 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 // advisory (falling back to issue_key when no advisory is attached) on
 // several branches collapsed into its earliest fix (an operator upgrades
 // once — the nearest release that fixes the issue is the actionable one),
-// then split into action_required (critical/high) and one-liner rest.
+// then split three ways. Severity alone used to decide what surfaced as
+// action_required, so a high fact that only bites ClusterMesh users read as
+// "upgrade now" to every reader (observed live, 2026-07-28). A condition the
+// caller has not resolved is not an action yet: those go to check_config, and
+// action_required keeps only what applies to everyone.
 // Extraction judges each release note independently, so the same advisory
 // can carry different severities across branches — a collapsed entry shows
 // the strongest judgment in its group.
-func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []briefFact) {
+func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []briefFact, []briefFact) {
 	idx := make([]int, len(relevant))
 	for i := range idx {
 		idx[i] = i
@@ -484,14 +517,20 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 			}
 		}
 		bf := &briefFact{
-			FactID:    f.FactID,
-			Version:   f.Version,
-			FactType:  f.FactType,
-			Severity:  f.EffSeverity(),
-			Mandatory: f.Mandatory,
-			Condition: f.Condition,
-			Quote:     f.Quote,
-			IDs:       f.RefIDs,
+			FactID:       f.FactID,
+			Version:      f.Version,
+			FactType:     f.FactType,
+			Severity:     f.EffSeverity(),
+			Mandatory:    f.Mandatory,
+			Condition:    f.Condition,
+			FixedIn:      f.FixedIn,
+			RemovedIn:    f.RemovedIn,
+			DeprecatedIn: f.DeprecatedIn,
+			Quote:        f.Quote,
+			IDs:          f.RefIDs,
+		}
+		if f.CondTarget != "" {
+			bf.Target = &conditionTarget{Kind: f.CondKind, Name: f.CondTarget}
 		}
 		if key != "" {
 			byIssue[key] = bf
@@ -510,15 +549,19 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 	}
 
 	action := []briefFact{}
+	check := []briefFact{}
 	other := []briefFact{}
 	for _, bf := range mergeSharedQuotes(ordered) {
-		if r := severityRank[strings.ToLower(bf.Severity)]; r >= severityRank["high"] {
-			action = append(action, *bf)
-		} else {
+		switch {
+		case severityRank[strings.ToLower(bf.Severity)] < severityRank["high"]:
 			other = append(other, *bf)
+		case bf.conditional():
+			check = append(check, *bf)
+		default:
+			action = append(action, *bf)
 		}
 	}
-	return sum, action, other
+	return sum, action, check, other
 }
 
 // mergeSharedQuotes folds brief entries that carry the same (version, quote):

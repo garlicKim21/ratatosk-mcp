@@ -48,7 +48,17 @@ type Fact struct {
 	Quote     string          `json:"quote"`
 	RefIDs    []string        `json:"ids"`
 	Condition string          `json:"condition"` // applies_if as one phrase; "" = unconditional
-	Raw       json.RawMessage `json:"-"`
+	// CondKind/CondTarget survive from a structured applies_if so an agent can
+	// look the thing up in a live config instead of parsing the phrase. Empty
+	// when the server only had a fallback sentence.
+	CondKind   string `json:"condition_kind"`
+	CondTarget string `json:"condition_target"`
+	// The version that ends the exposure. FixedIn is what turns a condition
+	// into a precondition — "before you enable X, be on at least this".
+	FixedIn      string          `json:"fixed_in"`
+	RemovedIn    string          `json:"removed_in"`
+	DeprecatedIn string          `json:"deprecated_in"`
+	Raw          json.RawMessage `json:"-"`
 }
 
 func (f *Fact) UnmarshalJSON(b []byte) error {
@@ -69,6 +79,11 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 			TargetName string `json:"target_name"`
 			Fallback   string `json:"fallback"`
 		} `json:"applies_if"`
+		Affected struct {
+			FixedIn      string `json:"fixed_in"`
+			RemovedIn    string `json:"removed_in"`
+			DeprecatedIn string `json:"deprecated_in"`
+		} `json:"affected"`
 		References struct {
 			IDs   []string `json:"ids"`
 			Quote string   `json:"quote"`
@@ -82,14 +97,50 @@ func (f *Fact) UnmarshalJSON(b []byte) error {
 	f.FactType, f.Severity, f.Mandatory = a.FactType, a.Severity, a.Mandatory
 	f.IssueKey, f.GroupKey, f.GroupSeverity = a.IssueKey, a.GroupKey, a.GroupSeverity
 	f.Quote, f.RefIDs = a.References.Quote, a.References.IDs
+	f.FixedIn, f.RemovedIn, f.DeprecatedIn = a.Affected.FixedIn, a.Affected.RemovedIn, a.Affected.DeprecatedIn
 	switch a.AppliesIf.Status {
 	case "structured":
-		f.Condition = strings.TrimSpace(strings.Join([]string{a.AppliesIf.Verb, a.AppliesIf.TargetKind, a.AppliesIf.TargetName}, " "))
+		f.Condition = conditionPhrase(a.AppliesIf.Verb, a.AppliesIf.TargetKind, a.AppliesIf.TargetName)
+		f.CondKind, f.CondTarget = a.AppliesIf.TargetKind, a.AppliesIf.TargetName
 	case "degraded":
 		f.Condition = a.AppliesIf.Fallback
 	}
 	f.Raw = append(f.Raw[:0], b...)
 	return nil
+}
+
+// conditionPhrase renders the stored (verb, kind, name) triple as English.
+// The kind is our storage enum, and joining the three raw put it on display:
+// "configures config_field per-upstream read timeout" is what a live kagent
+// transcript fed its model on 2026-07-28. Unknown kinds fall through to the
+// bare name, so a new kind on the server reads plainly instead of leaking.
+func conditionPhrase(verb, kind, name string) string {
+	verb = strings.ReplaceAll(strings.TrimSpace(verb), "_", " ")
+	name = strings.TrimSpace(name)
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	if name == "" {
+		return strings.TrimSpace(verb + " " + strings.ReplaceAll(kind, "_", " "))
+	}
+	var target string
+	switch kind {
+	case "flag":
+		target = "the " + name + " flag"
+	case "feature_gate":
+		target = "the " + name + " feature gate"
+	case "config_field":
+		target = "the " + name + " setting"
+	case "crd":
+		target = "the " + name + " CRD"
+	case "api":
+		target = "the " + name + " API"
+	case "extension":
+		target = "the " + name + " extension"
+	case "metric":
+		target = "the " + name + " metric"
+	default: // subsystem, dependency, and whatever the server adds next
+		target = name
+	}
+	return strings.TrimSpace(verb + " " + target)
 }
 
 // MarshalJSON re-emits the verbatim envelope the API returned.
