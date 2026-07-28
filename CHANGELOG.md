@@ -43,6 +43,16 @@ Changes are collected here and shipped together at the next version bump.
   forward as a precondition rather than dropping it.
 - Response format has explicit sections, replacing "lead with severity" —
   severity describes the damage if a condition holds, not the odds it holds.
+- **Where a version comes from is spelled out**, after a live run invented one.
+  A pod listing carries no images, so a whole-cluster pod survey left the agent
+  with nothing for cilium and it filled the gap with a plausible number
+  (1.16.0 against an actual 1.19.5) — every conclusion downstream was then
+  confidently wrong. The prompt now names the image-bearing listings, the
+  static-pod and node paths, and forbids sending check_stack any version that
+  was not read off a live resource.
+- **The forward-looking form has to be earned.** Filing every condition under
+  "before you enable this" without opening a ConfigMap skips the same judgment
+  as recommending the upgrade outright.
 
 ## [0.4.0] — 2026-07-27
 
