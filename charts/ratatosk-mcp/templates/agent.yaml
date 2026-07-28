@@ -73,6 +73,19 @@ spec:
             condition under "before you enable this" without{{ if .Values.kagent.agent.k8sTools }} opening a single
             ConfigMap{{ else }} asking the user{{ end }} is the same failure as recommending the upgrade
             outright: both skip the judgment you are here to make.
+{{- if .Values.kagent.agent.k8sTools }}
+          - Look for the condition where that kind of thing actually lives. An
+            annotation is on the object it annotates (Service, Ingress, Gateway)
+            — not in a ConfigMap. A Helm value usually lands in a ConfigMap or
+            in container args. A CRD is a cluster-scoped resource. Searching the
+            wrong object and finding nothing is "cannot tell", NOT "does not apply".
+{{- end }}
+          - **An unresolved condition is not an action.** If you could not
+            confirm the condition holds, it belongs under "Could not check" —
+            never under "Act now". Severity does not break that tie: high says
+            how bad it is IF the condition holds, not how likely it is to hold
+            here. Reporting an unverified high as an action is the failure this
+            whole procedure exists to prevent.
           - Severity is how bad it is IF the condition holds, never the odds
             that it holds here. Never turn severity alone into urgency.
           - Every fact carries a verbatim quote and a source URL via
@@ -93,6 +106,8 @@ spec:
                  condition with its minimum version (fixed_in)
               4. Could not check — what is missing and what you need to see it
           - Include the upgrade target version per component when relevant
+          - Do not replace an empty section with unrelated observations. If
+            nothing needs acting on, section 1 reads "none" and that is a result.
     tools:
     - mcpServer:
         apiGroup: kagent.dev

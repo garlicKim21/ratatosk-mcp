@@ -108,6 +108,10 @@ func main() {
 			"feature). One line each for the rest, " +
 			"and the same advisory fixed on several release branches collapsed into one entry " +
 			"(shown at the advisory's group-maximum severity). " +
+			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user "+
+			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot "+
+			"verify a version or its source; a running version older than every release on record is flagged in note, "+
+			"which is the only cross-check available here. "+
 			"Use detail:\"full\" for every fact verbatim (capped at 50 per component with relevant_facts_omitted — narrow with severity_min or target_version), " +
 			"target_version to limit to one upgrade hop, " +
 			"severity_min to filter. Components with zero facts carry tracked:true|false — tracked:false means " +
@@ -259,6 +263,11 @@ type stackComponent struct {
 	Project       string `json:"project" jsonschema:"project slug, e.g. envoy"`
 	Version       string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
 	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination: only facts with running < version <= target are returned"`
+	// VersionSource is an audit trail, never a check: this server cannot see the
+	// caller's environment and therefore cannot tell a real citation from an
+	// invented one. What it buys is a machine-readable claim to compare against
+	// later, and a slot the caller has to fill by actually looking something up.
+	VersionSource string `json:"version_source,omitempty" jsonschema:"where the running version was read, e.g. daemonset/cilium image tag or a user-provided value; echoed back so the claim can be audited"`
 }
 
 type checkStackArgs struct {
@@ -314,6 +323,7 @@ type briefSummary struct {
 type componentReport struct {
 	Project        string        `json:"project"`
 	RunningVersion string        `json:"running_version"`
+	VersionSource  string        `json:"version_source,omitempty"`
 	TargetVersion  string        `json:"target_version,omitempty"`
 	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-fact components
 	Note           string        `json:"note,omitempty"`
@@ -336,6 +346,25 @@ const otherFactsCap = 100
 // 75 facts ≈ 73 KB). The cut is counted in relevant_facts_omitted — never
 // silent; agents narrow with severity_min/target_version or drill down.
 const relevantFactsCap = 50
+
+// coverageNote flags a running version that sits below every release we hold a
+// fact for. It is the one cross-check this server can make on a claim about an
+// environment it cannot see, and it catches two different things with the same
+// sentence: a genuinely ancient install, where a briefing drawn from the
+// reviewed window is not the whole upgrade path, and a version that was never
+// read off a live resource (2026-07-28: an agent holding no version at all
+// supplied cilium 1.16.0 against an actual 1.19.5 — every answer after that was
+// confidently wrong and nothing downstream could tell).
+func coverageNote(running string, runningKey, oldest []int, oldestTag string) string {
+	if oldest == nil || version.Compare(runningKey, oldest) >= 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"running version %s is older than every release on record (earliest with facts: %s) — "+
+			"this covers the reviewed window only, so treat it as partial, and re-check that the "+
+			"running version was read off a live resource",
+		running, oldestTag)
+}
 
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
 	if len(args.Components) == 0 {
@@ -360,7 +389,12 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 
 	reports := make([]componentReport, 0, len(args.Components))
 	for _, comp := range args.Components {
-		rep := componentReport{Project: comp.Project, RunningVersion: comp.Version, TargetVersion: comp.TargetVersion}
+		rep := componentReport{
+			Project:        comp.Project,
+			RunningVersion: comp.Version,
+			VersionSource:  comp.VersionSource,
+			TargetVersion:  comp.TargetVersion,
+		}
 		var notes []string
 		currentKey := version.NormalizeVersion(comp.Version)
 		if currentKey == nil {
@@ -402,11 +436,16 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		unparseable := 0
 		var relevant []Fact
 		var keys [][]int
+		var oldest []int
+		var oldestTag string
 		for _, f := range facts {
 			factKey := version.NormalizeVersion(f.Version)
 			if factKey == nil {
 				unparseable++
 				continue
+			}
+			if oldest == nil || version.Compare(factKey, oldest) < 0 {
+				oldest, oldestTag = factKey, f.Version
 			}
 			if version.Compare(factKey, currentKey) <= 0 {
 				continue
@@ -422,6 +461,9 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		}
 		if unparseable > 0 {
 			notes = append(notes, fmt.Sprintf("%d fact(s) skipped (unparseable release tag)", unparseable))
+		}
+		if n := coverageNote(comp.Version, currentKey, oldest, oldestTag); n != "" {
+			notes = append(notes, n)
 		}
 		rep.Note = strings.Join(notes, "; ")
 

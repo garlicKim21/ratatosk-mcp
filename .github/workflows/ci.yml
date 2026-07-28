@@ -33,6 +33,14 @@ jobs:
             fi
           done
 
+      # The allowlist check above keeps the tools reachable; this one keeps the
+      # instructions honest. Both prompt regressions so far were deletions —
+      # a rule disappeared while rewording something near it, and the next live
+      # run answered confidently and wrongly with nothing downstream able to
+      # tell. The clause list is a record of failures we already paid for.
+      - name: agent prompt keeps the rules live failures put there
+        run: ./scripts/check-agent-prompt.sh
+
   # The static check above compares files. This one installs the chart on a real
   # cluster and asks the running server what it serves — the step whose absence
   # let v0.4.0 ship a chart pinned to the previous image with a tool the agent

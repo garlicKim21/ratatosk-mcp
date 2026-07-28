@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/garlicKim21/ratatosk-mcp/internal/version"
@@ -173,6 +174,37 @@ func TestBriefReportKeepsConditionalOutOfActionRequired(t *testing.T) {
 	}
 	if check[0].FixedIn != "v1.19.6" || action[0].FixedIn != "v1.19.6" {
 		t.Errorf("fixed_in must survive into the brief: check=%q action=%q", check[0].FixedIn, action[0].FixedIn)
+	}
+}
+
+// The server never sees the caller's cluster, so it cannot verify a running
+// version — with one exception: a version below everything on record. That is
+// the shape a fabricated version took live (cilium 1.16.0 reported for a 1.19.5
+// install), and the shape a genuinely ancient install takes too. Both deserve
+// the same warning, and neither may pass silently.
+func TestCoverageNote(t *testing.T) {
+	oldest, oldestTag := version.NormalizeVersion("v1.17.18"), "v1.17.18"
+
+	below := coverageNote("1.16.0", version.NormalizeVersion("1.16.0"), oldest, oldestTag)
+	if below == "" {
+		t.Fatal("a version below every release on record must be flagged")
+	}
+	for _, want := range []string{"1.16.0", "v1.17.18", "read off a live resource"} {
+		if !strings.Contains(below, want) {
+			t.Errorf("note must name %q: %s", want, below)
+		}
+	}
+
+	// Inside the window, and exactly at the earliest, are both normal.
+	if n := coverageNote("1.19.5", version.NormalizeVersion("1.19.5"), oldest, oldestTag); n != "" {
+		t.Errorf("a version inside the reviewed window must not be flagged: %s", n)
+	}
+	if n := coverageNote("1.17.18", version.NormalizeVersion("1.17.18"), oldest, oldestTag); n != "" {
+		t.Errorf("the earliest release itself must not be flagged: %s", n)
+	}
+	// No facts at all: the tracked/not-tracked probe already speaks, so stay quiet.
+	if n := coverageNote("1.0.0", version.NormalizeVersion("1.0.0"), nil, ""); n != "" {
+		t.Errorf("with nothing on record there is nothing to compare: %s", n)
 	}
 }
 

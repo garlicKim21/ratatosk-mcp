@@ -33,6 +33,16 @@ Changes are collected here and shipped together at the next version bump.
   structurally, so an agent can look the thing up in a live configuration
   instead of parsing the sentence.
 
+- **`version_source` on each component, echoed back.** Optional, and explicitly
+  not a check: this server cannot see the caller's environment, so it cannot
+  tell a real citation from an invented one. It exists so the claim is
+  machine-readable afterwards — a comparison script can hold the reported
+  version against the cluster without a person reading the answer.
+- **A running version below every release on record is flagged in `note`.**
+  The only cross-check available to a server that sees no configuration. It
+  catches a genuinely ancient install (the briefing is then partial, not clean)
+  and a version that was never read off a live resource at all.
+
 ### Agent definition (Helm chart + kagent example)
 
 - Discovery covers the **whole cluster**: `all_namespaces`, the control plane
@@ -53,6 +63,18 @@ Changes are collected here and shipped together at the next version bump.
 - **The forward-looking form has to be earned.** Filing every condition under
   "before you enable this" without opening a ConfigMap skips the same judgment
   as recommending the upgrade outright.
+- **An unverified condition is not an action.** With the rules above in place a
+  live run still read cilium-config, found no ClusterMesh, and filed the
+  ClusterMesh fact under "act now" anyway — severity broke the tie when the
+  condition could not be resolved. Unresolved now belongs under "could not
+  check", and the prompt says where to look for a condition: an annotation sits
+  on the object it annotates, not in a ConfigMap. Searching the wrong object is
+  "cannot tell", not "does not apply".
+- **CI asserts the prompt still carries the rules** (`scripts/check-agent-prompt.sh`).
+  Every prompt regression so far was a deletion — a rule vanished while
+  rewording something near it, and the next live run answered confidently and
+  wrongly. The clause list doubles as the record of failures already paid for,
+  and keeps the chart template and the kagent example from drifting apart.
 
 ## [0.4.0] — 2026-07-27
 
