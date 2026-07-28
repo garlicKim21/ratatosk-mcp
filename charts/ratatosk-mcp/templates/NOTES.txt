@@ -5,7 +5,7 @@ ratatosk-mcp is up. In-cluster MCP endpoint (streamable HTTP):
 {{- if .Values.kagent.enabled }}
 
 kagent integration is ON:
-  - RemoteMCPServer "{{ include "ratatosk-mcp.fullname" . }}" registered (5 tools discover automatically)
+  - RemoteMCPServer "{{ include "ratatosk-mcp.fullname" . }}" registered (its tools discover automatically)
 {{- if .Values.kagent.agent.enabled }}
   - Agent "{{ .Values.kagent.agent.name }}" installed — it appears in the kagent UI; try asking
     which of your running component versions need action.

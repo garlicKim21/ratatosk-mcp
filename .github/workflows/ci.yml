@@ -14,3 +14,21 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - run: go build ./...
+      # kagent needs every tool named in an allowlist to see it at all, and that
+      # list lives in two YAML files nothing type-checks. v0.4.0 shipped
+      # list_releases invisible to both install paths for exactly that reason:
+      # adding a tool means editing main.go plus two manifests, and only a human
+      # in a live cluster notices when the last two are forgotten. main.go is the
+      # source of truth here; the manifests must agree with it on every push.
+      - name: kagent tool allowlists match the registered tools
+        run: |
+          TOOLS="$(grep -oE '^\s*Name: "[a-z_]+"' main.go | grep -oE '"[a-z_]+"' | tr -d '"' | sort)"
+          echo "registered: $(echo "$TOOLS" | tr '\n' ' ')"
+          for f in charts/ratatosk-mcp/templates/agent.yaml examples/kagent/ratatosk-agent.yaml; do
+            LISTED="$(grep -oE '^ *- [a-z0-9_]+$' "$f" | sed 's/^ *- //' | grep -v '^k8s_' | sort)"
+            if [ "$LISTED" != "$TOOLS" ]; then
+              echo "::error file=$f::toolNames disagree with main.go"
+              diff <(echo "$TOOLS") <(echo "$LISTED") || true
+              exit 1
+            fi
+          done

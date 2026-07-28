@@ -42,6 +42,7 @@ spec:
         - list_projects
         - check_stack
         - get_release
+        - list_releases
         - facts_by_entity
         - list_facts
       type: McpServer

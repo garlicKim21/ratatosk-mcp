@@ -32,7 +32,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
   --namespace kagent --set kagent.enabled=true
 ```
 
-Adds a `RemoteMCPServer` (kagent discovers the five tools automatically) and a
+Adds a `RemoteMCPServer` (kagent discovers every tool the server exposes) and a
 ready-made `ratatosk-agent`. The agent also gets kagent's built-in read-only
 cluster tools (`k8s_get_resources`, `k8s_get_resource_yaml`) so it can find
 running versions on its own — turn this off with `kagent.agent.k8sTools=false`.

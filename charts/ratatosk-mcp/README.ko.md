@@ -32,7 +32,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp \
   --namespace kagent --set kagent.enabled=true
 ```
 
-`RemoteMCPServer`(kagent가 툴 5종을 자동 발견)와 준비된
+`RemoteMCPServer`(kagent가 서버의 툴을 모두 자동 발견)와 준비된
 `ratatosk-agent`가 추가됩니다. 에이전트에는 kagent 내장 읽기 전용
 클러스터 도구(`k8s_get_resources`, `k8s_get_resource_yaml`)도 붙어서
 구동 중인 버전을 스스로 알아냅니다 — 끄려면
