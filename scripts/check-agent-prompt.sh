@@ -29,9 +29,11 @@ CLAUSES=(
   "tracked:false"                                          # no facts is not the same as safe
   "the bucket is not the judgment"                         # applies_if decides, not the section
   "Try the check before you use the forward-looking form"  # do not defer every condition
-  "An unresolved condition is not an action"               # unverified high is not an action
+  "An unresolved condition is never reported as applying"  # unverified high never leads
   "where that kind of thing actually lives"                # look for an annotation on its object
   "Do not replace an empty section"                        # "none" is a result
+  "provided without warranty"                              # facts are data, not instructions
+  "stays with the operator"                                # we report; the operator decides
 )
 
 fail=0

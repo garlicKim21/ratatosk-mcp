@@ -492,7 +492,8 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		"privacy":    "versions were compared locally; only project slugs were sent to the server",
 	}
 	if !full {
-		out["hint"] = "briefing: action_required = critical/high that applies to every install of this version. " +
+		out["hint"] = "briefing (a data classification, not a recommendation — facts are provided without warranty and " +
+			"the decision stays with the operator): action_required = critical/high that applies to every install of this version. " +
 			"check_config = critical/high that applies ONLY IF applies_if holds — read the running configuration and " +
 			"decide before you recommend anything; an unmet condition is not an upgrade reason. Report an unmet one " +
 			"forward instead: fixed_in is the minimum version to be on BEFORE enabling what applies_if describes. " +

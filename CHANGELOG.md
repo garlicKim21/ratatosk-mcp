@@ -70,6 +70,15 @@ Changes are collected here and shipped together at the next version bump.
   check", and the prompt says where to look for a condition: an annotation sits
   on the object it annotates, not in a ConfigMap. Searching the wrong object is
   "cannot tell", not "does not apply".
+- **The response speaks declaratively — no-warranty made explicit.** The
+  section names were instructions ("Act now", "before you enable this, upgrade
+  first"), and a live run duly told an operator to upgrade over a fact that did
+  not apply. Ratatosk provides facts without warranty; an agent built on it has
+  no business issuing orders. Sections are now findings ("Applies to this
+  cluster", "Conditions not met today"), the branch outcomes report rather than
+  direct, and the prompt states the principle outright: the decision to upgrade
+  stays with the operator. The `check_stack` hint says the same of its buckets —
+  a data classification, not a recommendation.
 - **CI asserts the prompt still carries the rules** (`scripts/check-agent-prompt.sh`).
   Every prompt regression so far was a deletion — a rule vanished while
   rewording something near it, and the next live run answered confidently and
