@@ -83,6 +83,11 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 自力で見つけます（`kagent.agent.k8sTools=false` で無効化可能）。質問に
 バージョンを直接書いても構いません。
 
+> **モデルの最小要件**: エージェントの実行 1 回で内部モデル呼び出しが 6 回
+> 以上発生し、kagent Go ADK は 429 のリトライを行わないため、毎分約 10
+> リクエスト未満のモデルティアでは毎回失敗します（実測: 5 RPM の gemini
+> 無料ティアは 1 回も完走できず）。
+
 > **kagent 0.9.12 自体の既知の問題**（このチャートとは無関係）:
 > エージェントランタイムを Go ADK に切り替えると ImagePullBackOff に
 > なります。Go ADK イメージは `ghcr.io` のみに発行されている一方、

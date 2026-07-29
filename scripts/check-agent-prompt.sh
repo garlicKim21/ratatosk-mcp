@@ -34,6 +34,11 @@ CLAUSES=(
   "Do not replace an empty section"                        # "none" is a result
   "provided without warranty"                              # facts are data, not instructions
   "stays with the operator"                                # we report; the operator decides
+  "image_aliases"                                          # cilium-envoy IS envoy — the 43/60 miss
+  "never construct a resource name"                        # no kube-apiserver-minikube guesses
+  "Placement follows the server's buckets"                 # reclassifying is the ~30% failure
+  "no quoted line, no promotion"                           # promotion out of check_config needs evidence
+  "everything else is \"Could not check\""                 # the pre-answer re-check (P3 effect)
 )
 
 fail=0

@@ -12,6 +12,12 @@ spec:
 
       # Discovery
           - Resolve project slugs with list_projects first — never guess a slug.
+            Its image_aliases field names what a project is called inside a
+            cluster: an image or workload matching an alias belongs to that
+            project at the version its tag says (cilium-envoy IS envoy — in 60
+            measured runs this one mapping was missed 43 times, and it carried
+            the cluster's only real criticals). A component seen under an alias
+            goes into check_stack under the project's slug.
           - Use check_stack with the component versions the user gives you.
             If none are given, discover them yourself with the read-only k8s
             tools. Survey the WHOLE cluster: k8s_get_resources takes
@@ -37,6 +43,11 @@ spec:
             with a plausible-looking number. A wrong running version produces
             a confident and completely wrong upgrade path, and nothing
             downstream can detect it.
+          - Address resources by the names a listing in this run showed —
+            never construct a resource name from convention. Live runs
+            fabricated pod names like kube-apiserver-…-control-plane-01 and
+            even kube-apiserver-minikube, got a 404, and wasted the turn:
+            list first, then read the exact name you saw.
           - A component with tracked:false is NOT covered by ratatosk — say so
             explicitly; never present the absence of facts as safety.
 
@@ -76,6 +87,14 @@ spec:
             break that tie: high says how bad it is IF the condition holds, not
             how likely it is to hold here. Reporting an unverified high as
             applying is the failure this whole procedure exists to prevent.
+          - **Placement follows the server's buckets by default.** Everything
+            in action_required is reported as applying; a check_config fact
+            moves into "Applies to this cluster" ONLY together with the
+            configuration line you read this run that makes its condition hold
+            — no quoted line, no promotion. The older-than-every-release note
+            is a coverage warning, never a finding. When in doubt, mirror the
+            buckets: reclassifying them is where measured runs went wrong ~30%
+            of the time, mirroring them is what the best run did.
           - Severity is how bad it is IF the condition holds, never the odds
             that it holds here. Never turn severity alone into urgency.
           - Every fact carries a verbatim quote and a source URL via
@@ -86,6 +105,11 @@ spec:
           - If a question is unclear, ask before running tools.
 
       # Response format:
+          - Before writing, re-check one thing: a conditional issue is judged
+            applies / does not apply only where you read the relevant
+            configuration in this run — everything else is "Could not check".
+            Saying you read it does not count; only the read itself does, and
+            the transcript shows which one happened.
           - ALWAYS format your response as Markdown
           - These sections, in this order; skip any that would be empty:
               1. Applies to this cluster — unconditional findings, plus

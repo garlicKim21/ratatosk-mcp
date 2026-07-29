@@ -82,6 +82,11 @@ The agent finds running versions itself via kagent's built-in read-only
 cluster tools (disable with `kagent.agent.k8sTools=false`), or you can name
 the versions in the question.
 
+> **Model minimum**: one agent run makes 6+ internal model calls and the
+> kagent Go ADK does not retry on 429, so a model tier below ~10 requests
+> per minute fails every run (measured: gemini free tiers at 5 RPM never
+> completed a single run).
+
 > **Known issue in kagent 0.9.12 itself** (not this chart): switching the
 > agent runtime to the Go ADK hits ImagePullBackOff, because the Go ADK image
 > is published to `ghcr.io` only while the controller still defaults to the
