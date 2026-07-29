@@ -81,6 +81,14 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 알아냅니다(`kagent.agent.k8sTools=false`로 끌 수 있음). 질문에 버전을
 직접 적어도 됩니다.
 
+> **kagent 0.9.12 자체의 알려진 문제**(이 차트와 무관): 에이전트 런타임을
+> Go ADK로 바꾸면 ImagePullBackOff가 납니다. Go ADK 이미지는 `ghcr.io`에만
+> 발행되는데 컨트롤러 기본값이 폐기된 `cr.kagent.dev`를 가리키기 때문입니다
+> (kagent [#2247], 0.9.12 이후 수정). 우회: kagent 설치에
+> `--set controller.agentImage.registry=ghcr.io`.
+
+[#2247]: https://github.com/kagent-dev/kagent/issues/2247
+
 ## 설정
 
 | 환경변수 | 기본값 | |

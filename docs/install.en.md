@@ -82,6 +82,15 @@ The agent finds running versions itself via kagent's built-in read-only
 cluster tools (disable with `kagent.agent.k8sTools=false`), or you can name
 the versions in the question.
 
+> **Known issue in kagent 0.9.12 itself** (not this chart): switching the
+> agent runtime to the Go ADK hits ImagePullBackOff, because the Go ADK image
+> is published to `ghcr.io` only while the controller still defaults to the
+> retired `cr.kagent.dev` registry (kagent [#2247], fixed after 0.9.12).
+> Workaround on the kagent install:
+> `--set controller.agentImage.registry=ghcr.io`.
+
+[#2247]: https://github.com/kagent-dev/kagent/issues/2247
+
 ## Configuration
 
 | Env | Default | |
