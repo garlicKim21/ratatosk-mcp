@@ -7,6 +7,12 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+## [0.4.1] — 2026-07-29
+
+Everything below came out of one week of dogfooding: a kagent agent ran
+against a live cluster, answered wrongly three times in three different
+ways, and each failure became a structural fix rather than a patch note.
+
 ### Changed
 
 - **`check_stack` no longer calls a conditional finding an action.**
