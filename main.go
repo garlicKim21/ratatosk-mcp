@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -366,6 +367,33 @@ func coverageNote(running string, runningKey, oldest []int, oldestTag string) st
 		running, oldestTag)
 }
 
+// confessionRe matches version_source values that describe an inference
+// rather than a live read. Sixty controlled runs (2026-07-29 hub campaign)
+// gave this a clean separation: all 8 versions whose source contained such
+// vocabulary were hallucinations, all 197 citing a concrete read were correct,
+// zero crossover. The model does not forge sources — it confesses. "stated"
+// and "standard" stay OFF the list: a user-stated version is a legitimate
+// source in the no-cluster-access deployment, and every observed confession
+// is caught without them.
+var confessionRe = regexp.MustCompile(`(?i)infer|assum|guess|estimat|likely|probab|typical|need verification|not verified|unverified`)
+
+// confessionNote turns a self-confessed inferred source into a warning on the
+// component's note — the same channel as the low-version warning. Pattern
+// matching the caller's own words, never the environment: the server still
+// sees no cluster, so this is the second of exactly two cross-checks it can
+// make on a version claim.
+func confessionNote(src string) string {
+	if src == "" || !confessionRe.MatchString(src) {
+		return ""
+	}
+	if len(src) > 80 {
+		src = src[:80] + "…"
+	}
+	return fmt.Sprintf("version_source reads as an inference, not a live read (%q) — treat the "+
+		"running version as unverified and re-read it off a live resource; in measurement, every "+
+		"self-described inferred version was wrong", src)
+}
+
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
 	if len(args.Components) == 0 {
 		return errResult(fmt.Errorf("components is required")), nil, nil
@@ -463,6 +491,9 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			notes = append(notes, fmt.Sprintf("%d fact(s) skipped (unparseable release tag)", unparseable))
 		}
 		if n := coverageNote(comp.Version, currentKey, oldest, oldestTag); n != "" {
+			notes = append(notes, n)
+		}
+		if n := confessionNote(comp.VersionSource); n != "" {
 			notes = append(notes, n)
 		}
 		rep.Note = strings.Join(notes, "; ")

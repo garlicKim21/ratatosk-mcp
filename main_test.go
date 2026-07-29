@@ -208,6 +208,44 @@ func TestCoverageNote(t *testing.T) {
 	}
 }
 
+// Acceptance criteria from the hub's 60-run campaign: the 8 observed
+// confessed sources all flag, a representative sample of the 197 concrete
+// sources never does. The vocabulary list deliberately omits "stated" (a
+// user-stated version is legitimate in the no-cluster-access deployment) and
+// "standard" — every observed confession is caught without them.
+func TestConfessionNote(t *testing.T) {
+	confessions := []string{
+		"user stated/inferred from environment",
+		"cilium-operator image tag inferred from typical deployment versioning",
+		"inferred from cluster age/k8s version mapping",
+		"cilium-operator image tag (assumed from discovery)",
+		"coredns deployment image tag (assumed from discovery)",
+		"guessed from k8s 1.36 stack (need verification)",
+		"inferred from standard k8s deployments",
+		"inferred from image in pod/coredns",
+	}
+	for _, s := range confessions {
+		if confessionNote(s) == "" {
+			t.Errorf("confessed source must be flagged: %q", s)
+		}
+	}
+	concrete := []string{
+		"", // absent is not a confession
+		"daemonset/cilium image tag",
+		"node v1.36.2",
+		"node runtime 2.2.5",
+		"kube-apiserver pod image (kube-system)",
+		"deployment/coredns image tag",
+		"user-provided version",
+		"read from cilium-config ConfigMap",
+	}
+	for _, s := range concrete {
+		if n := confessionNote(s); n != "" {
+			t.Errorf("concrete source must not be flagged: %q -> %s", s, n)
+		}
+	}
+}
+
 // The condition phrase is read by a model and shown to people; our storage
 // enum must not appear in it. Observed live: "configures config_field
 // per-upstream read timeout".

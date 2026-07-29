@@ -7,6 +7,43 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### Agent definition (Helm chart + kagent example) — from the 60-run evaluation
+
+A controlled campaign (3 prompts × 20 runs, fixed rubric, hub-run against a
+live cluster) put numbers on the failure modes and the prompt now answers
+them:
+
+- **Aliases are spelled out.** `cilium-envoy` was visible in all 60 runs and
+  mapped to envoy in 17 — the cluster's only real criticals rode on that one
+  mapping. The prompt points at `/v1/projects`' new `image_aliases` field.
+- **Bucket placement is the default, promotion needs evidence.** ~30% of runs
+  promoted conditional facts or the coverage note into "applies" regardless of
+  prompt wording; the best-scoring run mirrored the server's buckets exactly.
+  Now: action_required reports as applying, check_config moves only together
+  with the configuration line that was actually read, the low-version note is
+  never a finding.
+- **The judgment rule is restated at the response boundary.** Repeating it in
+  the user turn tripled config reads and envoy detection in the campaign
+  (P3 effect); the same wording now sits directly before the response-format
+  rules, with the note that claiming to have read a config does not count —
+  runs were observed narrating reads that never happened.
+- **Resource names come from listings.** Runs invented pod names
+  (`kube-apiserver-minikube`) and burned turns on 404s.
+- Install docs state the model floor: ~10 RPM, because one run is 6+ internal
+  calls and the kagent Go ADK does not retry 429s.
+
+### Added
+
+- **`check_stack` flags self-confessed inferred versions.** Across 60 runs,
+  every version whose `version_source` described an inference ("inferred from
+  typical deployment versioning", "guessed from k8s 1.36 stack") was a
+  hallucination — 8 of 8 — and every version citing a concrete read was
+  correct (197 of 197). The model does not forge sources; it confesses. When
+  a `version_source` reads as inference rather than a live read, the
+  component's `note` now says so, in the same channel as the low-version
+  warning. Detection is a vocabulary match on the caller's own words — the
+  server still sees no cluster.
+
 ## [0.4.1] — 2026-07-29
 
 Everything below came out of one week of dogfooding: a kagent agent ran
