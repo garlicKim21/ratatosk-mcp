@@ -7,6 +7,8 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+## [0.6.0] — 2026-07-30
+
 ### Audit stream (P3) — who did what, inside your own perimeter
 
 - `MCP_AUDIT=metadata` (chart `auditMode`) emits one `event:"audit"` JSON
