@@ -7,6 +7,22 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### Agent definition rev 14 — what-to-check becomes roster data
+
+- The third campaign confirmed prompt attention is zero-sum: tightening
+  envoy enumeration halved coredns coverage (90→45%), mirroring rev 12's
+  opposite-direction seesaw. The cure that worked for name mapping
+  (`image_aliases`) now applies to coverage: `/v1/projects` marks the
+  cluster substrate with `cluster_core:true`, and the agent prompt reduces
+  the what-to-check question to one data-driven line — every marked project
+  present in the cluster goes into check_stack. The `list_projects` tool
+  description documents both fields.
+- The count-preservation rule moved INTO the response template (section 1
+  is defined as "every action_required fact, one entry each") instead of
+  competing with the template as a separate rule — the third campaign
+  showed some runs dropping the 4-section format as enumeration rules
+  grew louder. One clause guards the roster line in check-agent-prompt.sh.
+
 ## [0.5.0] — 2026-07-30
 
 ### MCP 2026-07-28 revision support (go-sdk v1.7.0)

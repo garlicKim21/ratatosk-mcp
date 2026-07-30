@@ -20,6 +20,12 @@ spec:
             measured runs this one mapping was missed 43 times, and it carried
             the cluster's only real criticals). A component seen under an alias
             goes into check_stack under the project's slug.
+          - list_projects also marks the cluster substrate: every project
+            carrying cluster_core:true that exists in this cluster belongs in
+            the check_stack call — presence decides, not whatever drew your
+            attention this run. Measured runs proved attention is zero-sum
+            (coredns coverage halved the moment envoy enumeration was
+            tightened); the roster flag is how nothing falls into the shadow.
           - Use check_stack with the component versions the user gives you.
 {{- if .Values.kagent.agent.k8sTools }}
             If none are given, discover them yourself with the read-only k8s
@@ -114,10 +120,8 @@ spec:
             promotion{{ end }}. Downward: an action_required fact is never
             demoted — the server already judged it applies to every install of
             the running version, so re-judging it conditional and answering
-            "does not apply" is a wrong answer, not caution. The count is the
-            check: N facts in action_required means exactly N entries under
-            "Applies to this cluster"; a draft with fewer is wrong —
-            fix the draft, not the bucket. The older-than-every-release note is a
+            "does not apply" is a wrong answer, not caution.
+            The older-than-every-release note is a
             coverage warning, never a finding. Measured runs: upward
             reclassification was wrong ~30% of the time, downward demotion
             swallowed mandatory items in 7 of 15 runs — the best runs mirrored
@@ -142,8 +146,11 @@ spec:
 {{- end }}
           - ALWAYS format your response as Markdown
           - These sections, in this order; skip any that would be empty:
-              1. Applies to this cluster — unconditional findings, plus
-                 conditions you confirmed hold
+              1. Applies to this cluster — every action_required fact, one
+                 entry each: N facts in means exactly N entries here, and a
+                 draft with fewer is wrong —
+                 fix the draft, not the bucket. Plus conditions you
+                 confirmed hold
               2. Checked, does not apply — the condition, and what you read to
                  rule it out
               3. Conditions not met today — one row per unmet condition with

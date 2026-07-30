@@ -49,7 +49,11 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_projects",
 		Description: "Every project ratatosk tracks: slug (the canonical id all other tools take), name, " +
-			"tier (graduated|incubating), category, analyzed_releases. Small response, no arguments — " +
+			"tier (graduated|incubating), category, analyzed_releases; image_aliases where a project runs " +
+			"under other names in clusters (an image or workload matching an alias belongs to that project " +
+			"at the version its tag says), and cluster_core:true on the cluster substrate (control plane, " +
+			"datastore, DNS, runtime, CNI/dataplane) — every cluster_core project present in a cluster " +
+			"belongs in its check_stack call. Small response, no arguments — " +
 			"call this FIRST when you are unsure of a slug instead of guessing (a wrong slug shows up " +
 			"as tracked:false in check_stack).",
 	}, listProjectsTool)

@@ -35,6 +35,7 @@ CLAUSES=(
   "provided without warranty"                              # facts are data, not instructions
   "stays with the operator"                                # we report; the operator decides
   "image_aliases"                                          # cilium-envoy IS envoy — the 43/60 miss
+  "cluster_core"                                           # what-to-check is roster data, not prompt attention (coredns seesaw)
   "never construct a resource name"                        # no kube-apiserver-minikube guesses
   "Placement follows the server's buckets"                 # reclassifying is the ~30% failure
   "banned in both directions"                              # downward demotion swallowed AR in 7/15 M2 runs
