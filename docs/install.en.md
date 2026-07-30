@@ -85,7 +85,10 @@ the versions in the question.
 > **Model minimum**: one agent run makes 6+ internal model calls and the
 > kagent Go ADK does not retry on 429, so a model tier below ~10 requests
 > per minute fails every run (measured: gemini free tiers at 5 RPM never
-> completed a single run).
+> completed a single run). On free tiers, prefer the **flash-lite line** —
+> as of 2026-07 every full-flash gemini free tier sits at 5 RPM while the
+> flash-lite tiers carry agent-viable rate limits (measured across a
+> 60-run campaign).
 
 > **Known issue in kagent 0.9.12 itself** (not this chart): switching the
 > agent runtime to the Go ADK hits ImagePullBackOff, because the Go ADK image

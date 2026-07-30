@@ -7,6 +7,41 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### MCP 2026-07-28 revision support (go-sdk v1.7.0)
+
+- **SDK bump v1.6.1 → v1.7.0.** All five protocol revisions (2024-11-05 →
+  2026-07-28) negotiate natively; the legacy `initialize` handshake keeps
+  working through its deprecation window (wire-probed both transports).
+- **Opt-in stateless HTTP** (`MCP_HTTP_STATELESS=1`, chart value
+  `statelessHttp`): no `Mcp-Session-Id` round-trip, and — per SDK design —
+  the only HTTP mode that speaks the 2026-07-28 revision. Default stays
+  stateful, so existing installs see no transport change; stdio speaks every
+  revision regardless.
+
+### check_stack: self-nullifying target_version guard — from the 20-run M2 campaign
+
+- A `target_version` at or below the running version defines the empty range
+  `(running, target]`; 5 of 20 measured agent runs sent exactly
+  running-as-target and read the guaranteed zero facts as "no issues". Such a
+  target is now **ignored, with a note** that explains the empty range and
+  teaches the intended use (version = running, target = destination). The
+  schema description says the same. Replaying the self-nullifying call now
+  returns every action_required fact (regression-tested).
+
+### Agent definition rev 13 — bucket reclassification banned both ways
+
+- The M2 (3.5-flash-lite) campaign surfaced the inverse of the known
+  promotion failure: **silent demotion** — the server returned mandatory
+  action_required facts and 7 of 15 answers still said "Applies: none". The
+  placement rule now bans reclassification in both directions and adds a
+  count check (N action_required ⇒ exactly N entries under "Applies");
+  two new clauses guard it in `scripts/check-agent-prompt.sh`.
+
+### Docs
+
+- Install docs (en/ko/ja): on free model tiers prefer the flash-lite line —
+  measured 2026-07, every full-flash free tier sits at 5 RPM (agent-inviable).
+
 ### Agent definition (Helm chart + kagent example) — from the 60-run evaluation
 
 A controlled campaign (3 prompts × 20 runs, fixed rubric, hub-run against a

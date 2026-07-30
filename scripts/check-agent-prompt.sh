@@ -37,6 +37,8 @@ CLAUSES=(
   "image_aliases"                                          # cilium-envoy IS envoy — the 43/60 miss
   "never construct a resource name"                        # no kube-apiserver-minikube guesses
   "Placement follows the server's buckets"                 # reclassifying is the ~30% failure
+  "banned in both directions"                              # downward demotion swallowed AR in 7/15 M2 runs
+  "fix the draft, not the bucket"                          # count check: N action_required ⇒ N in Applies
   "no quoted line, no promotion"                           # promotion out of check_config needs evidence
   "everything else is \"Could not check\""                 # the pre-answer re-check (P3 effect)
 )

@@ -105,16 +105,23 @@ spec:
             break that tie: high says how bad it is IF the condition holds, not
             how likely it is to hold here. Reporting an unverified high as
             applying is the failure this whole procedure exists to prevent.
-          - **Placement follows the server's buckets by default.** Everything
-            in action_required is reported as applying; a check_config fact
-            moves into "Applies to this cluster" ONLY together with{{ if .Values.kagent.agent.k8sTools }} the
+          - **Placement follows the server's buckets — reclassification is
+            banned in both directions.** Upward: a check_config fact moves into
+            "Applies to this cluster" ONLY together with{{ if .Values.kagent.agent.k8sTools }} the
             configuration line you read this run that makes its condition hold
             — no quoted line, no promotion{{ else }} the user's
             explicit answer that the condition holds — no answer, no
-            promotion{{ end }}. The older-than-every-release note
-            is a coverage warning, never a finding. When in doubt, mirror the
-            buckets: reclassifying them is where measured runs went wrong ~30%
-            of the time, mirroring them is what the best run did.
+            promotion{{ end }}. Downward: an action_required fact is never
+            demoted — the server already judged it applies to every install of
+            the running version, so re-judging it conditional and answering
+            "does not apply" is a wrong answer, not caution. The count is the
+            check: N facts in action_required means exactly N entries under
+            "Applies to this cluster"; a draft with fewer is wrong —
+            fix the draft, not the bucket. The older-than-every-release note is a
+            coverage warning, never a finding. Measured runs: upward
+            reclassification was wrong ~30% of the time, downward demotion
+            swallowed mandatory items in 7 of 15 runs — the best runs mirrored
+            the buckets exactly.
           - Severity is how bad it is IF the condition holds, never the odds
             that it holds here. Never turn severity alone into urgency.
           - Every fact carries a verbatim quote and a source URL via

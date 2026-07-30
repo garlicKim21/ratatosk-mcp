@@ -84,7 +84,9 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 > **모델 최소 요건**: 에이전트 런 1회가 내부 모델 호출 6회 이상을 만들고
 > kagent Go ADK는 429 재시도를 하지 않으므로, 분당 약 10요청 미만의 모델
 > 티어에서는 매 런이 실패합니다(실측: 5 RPM인 gemini 무료 티어는 단 한
-> 런도 완주하지 못함).
+> 런도 완주하지 못함). 무료 티어에서는 **flash-lite 계열을 권장**합니다 —
+> 2026-07 기준 full-flash 계열 무료 티어는 전부 5 RPM이고, flash-lite
+> 티어만 에이전트 구동이 가능한 한도를 제공합니다(60런 캠페인 실측).
 
 > **kagent 0.9.12 자체의 알려진 문제**(이 차트와 무관): 에이전트 런타임을
 > Go ADK로 바꾸면 ImagePullBackOff가 납니다. Go ADK 이미지는 `ghcr.io`에만
