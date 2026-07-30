@@ -12,7 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -32,6 +32,7 @@ var buildVersion = "dev"
 var api *apiClient
 
 func main() {
+	setupLogging()
 	base := os.Getenv("RATATOSK_URL")
 	if base == "" {
 		base = "https://ratatosk.io"
@@ -144,12 +145,19 @@ func main() {
 		if stateless {
 			mode = "stateless"
 		}
-		log.Printf("ratatosk-mcp: streamable HTTP on %s/mcp (%s, upstream %s)", addr, mode, base)
-		log.Fatal(http.ListenAndServe(addr, mux))
+		slog.Info("listening", "transport", "http", "addr", addr+"/mcp", "mode", mode, "upstream", base, "version", buildVersion)
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			slog.Error("http server exited", "kind", errKind(err))
+			os.Exit(1)
+		}
+		return
 	}
+	slog.Info("listening", "transport", "stdio", "upstream", base, "version", buildVersion)
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		log.Fatal(err)
+		slog.Error("stdio session ended with error", "kind", errKind(err))
+		os.Exit(1)
 	}
+	slog.Info("stdio session ended")
 }
 
 // jsonResult marshals compactly: tool output is read by agents, and the
@@ -176,7 +184,8 @@ func errResult(err error) *mcp.CallToolResult {
 type listProjectsArgs struct{}
 
 func listProjectsTool(ctx context.Context, req *mcp.CallToolRequest, args listProjectsArgs) (*mcp.CallToolResult, any, error) {
-	raw, err := api.listProjects()
+	ctx = requestContext(ctx, "list_projects", req)
+	raw, err := api.listProjects(ctx)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -196,7 +205,8 @@ type listFactsArgs struct {
 }
 
 func listFactsTool(ctx context.Context, req *mcp.CallToolRequest, args listFactsArgs) (*mcp.CallToolResult, any, error) {
-	page, err := api.listFacts(args.Project, args.Type, args.Severity, args.Since, args.Limit)
+	ctx = requestContext(ctx, "list_facts", req)
+	page, err := api.listFacts(ctx, args.Project, args.Type, args.Severity, args.Since, args.Limit)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -214,10 +224,11 @@ type factsByEntityArgs struct {
 }
 
 func factsByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args factsByEntityArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "facts_by_entity", req)
 	if args.Name == "" {
 		return errResult(fmt.Errorf("name is required")), nil, nil
 	}
-	facts, err := api.factsByEntity(args.Name, args.Kind)
+	facts, err := api.factsByEntity(ctx, args.Name, args.Kind)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -235,6 +246,7 @@ type listReleasesArgs struct {
 }
 
 func listReleasesTool(ctx context.Context, req *mcp.CallToolRequest, args listReleasesArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "list_releases", req)
 	if args.Project == "" {
 		return errResult(fmt.Errorf("project is required")), nil, nil
 	}
@@ -245,7 +257,7 @@ func listReleasesTool(ctx context.Context, req *mcp.CallToolRequest, args listRe
 	if limit > 20 {
 		limit = 20
 	}
-	raw, err := api.listReleases(args.Project, limit)
+	raw, err := api.listReleases(ctx, args.Project, limit)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -259,10 +271,11 @@ type getReleaseArgs struct {
 }
 
 func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getReleaseArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "get_release", req)
 	if args.Project == "" {
 		return errResult(fmt.Errorf("project is required")), nil, nil
 	}
-	raw, err := api.getRelease(args.Project, args.Version, args.IncludeRaw)
+	raw, err := api.getRelease(ctx, args.Project, args.Version, args.IncludeRaw)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -430,6 +443,7 @@ func resolveTarget(currentKey []int, targetRaw string) ([]int, string) {
 }
 
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "check_stack", req)
 	if len(args.Components) == 0 {
 		return errResult(fmt.Errorf("components is required")), nil, nil
 	}
@@ -469,7 +483,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		if targetNote != "" {
 			notes = append(notes, targetNote)
 		}
-		facts, err := api.allProjectFacts(comp.Project)
+		facts, err := api.allProjectFacts(ctx, comp.Project)
 		if err != nil {
 			rep.Note = "fetch failed: " + err.Error()
 			reports = append(reports, rep)
@@ -480,7 +494,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		// or no coverage at all (unknown slug). Probe and say which — an agent
 		// must never read "not tracked" as "safe" (2026-07-23 kagent finding).
 		if len(facts) == 0 {
-			if tracked, perr := api.projectTracked(comp.Project); perr != nil {
+			if tracked, perr := api.projectTracked(ctx, comp.Project); perr != nil {
 				notes = append(notes, "tracking probe failed: "+perr.Error())
 			} else {
 				rep.Tracked = &tracked

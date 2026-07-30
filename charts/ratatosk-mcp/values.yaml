@@ -15,6 +15,11 @@ ratatoskUrl: https://ratatosk.io
 # no transport change; turn on for horizontally-scaled or hosted setups.
 statelessHttp: false
 
+# Log level (MCP_LOG): "" = info. "debug" adds per-call timing — still
+# argument-free; no request content reaches logs at any level (see
+# docs/logging-design.md, "the invariant").
+logLevel: ""
+
 service:
   type: ClusterIP
   port: 8080

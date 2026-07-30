@@ -25,6 +25,15 @@ hosted-endpoint decision (post-launch, separate track) *depends on* P1
 existing — operating a public endpoint without an error log is not on the
 table — and makes P4 more valuable, but nothing here waits for it.
 
+**Status (2026-07-30): P0, P1 and P2 are implemented on main, unreleased.**
+P1 = `log.go` + classified logging at the `apiClient` choke points (levels as
+specced; the marker probe and the client-mistake discipline are tests:
+`TestLogInvariantMarkerProbe`, `TestClientMistakeIsNotError`). P2 =
+`requestContext` reads `_meta["traceparent"]` (W3C-validated, malformed
+dropped), stamps `tool`/`trace_id` on every log line via the context handler,
+and forwards the header on upstream `/v1` calls (`TestTracePropagation`).
+Chart knobs: `statelessHttp`, `logLevel`. Defaults: everything inert.
+
 ## P0 findings (2026-07-30, measured on go-sdk v1.7.0)
 
 - **Dual revision is native.** The SDK ships all five revisions (2024-11-05 →

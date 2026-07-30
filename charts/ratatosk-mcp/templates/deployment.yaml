@@ -31,6 +31,10 @@ spec:
             - name: MCP_HTTP_STATELESS
               value: "1"
 {{- end }}
+{{- if .Values.logLevel }}
+            - name: MCP_LOG
+              value: {{ .Values.logLevel | quote }}
+{{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

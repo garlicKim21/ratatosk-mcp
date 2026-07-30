@@ -5,9 +5,11 @@ package main
 // envelope loosely — unknown fields are ignored so the server can evolve.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -160,24 +162,47 @@ type factsPage struct {
 	NextSince *int   `json:"next_since"`
 }
 
-func (c *apiClient) get(path string, q url.Values, out any) error {
+// get fetches one /v1 resource. endpoint is the log-safe route PATTERN
+// ("/v1/releases/{project}/{version}") — path itself can embed a running
+// version, so it appears in errors returned to the agent (which needs the
+// detail) but never in a log field (the invariant).
+func (c *apiClient) get(ctx context.Context, endpoint, path string, q url.Values, out any) error {
 	u := c.baseURL + path
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
+	if tp := traceparentFrom(ctx); tp != "" {
+		req.Header.Set("traceparent", tp)
+	}
+	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
+		slog.ErrorContext(ctx, "upstream fetch failed", "upstream", endpoint, "kind", errKind(err))
 		return err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
+		slog.ErrorContext(ctx, "upstream body read failed", "upstream", endpoint, "kind", errKind(err))
 		return err
+	}
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		slog.DebugContext(ctx, "upstream ok", "upstream", endpoint, "status", resp.StatusCode, "ms", time.Since(start).Milliseconds())
+	case resp.StatusCode == http.StatusTooManyRequests:
+		slog.WarnContext(ctx, "upstream rate limited", "upstream", endpoint, "status", resp.StatusCode)
+	case resp.StatusCode >= 500:
+		slog.ErrorContext(ctx, "upstream error", "upstream", endpoint, "status", resp.StatusCode)
+	default:
+		// A client mistake (unknown slug, bad params) is answered with guidance
+		// by the tool itself — that answer IS the handling. DEBUG, never ERROR:
+		// one confused agent's typo loop must not page an operator.
+		slog.DebugContext(ctx, "upstream rejected request", "upstream", endpoint, "status", resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
 		// 400 chars so self-correcting errors survive intact — the /v1 404 now
@@ -195,7 +220,7 @@ func truncate(s string, n int) string {
 }
 
 // listFacts fetches one page of /v1/facts.
-func (c *apiClient) listFacts(project, factType, severity string, since, limit int) (*factsPage, error) {
+func (c *apiClient) listFacts(ctx context.Context, project, factType, severity string, since, limit int) (*factsPage, error) {
 	q := url.Values{}
 	if project != "" {
 		q.Set("project", project)
@@ -213,7 +238,7 @@ func (c *apiClient) listFacts(project, factType, severity string, since, limit i
 		q.Set("limit", fmt.Sprint(limit))
 	}
 	var page factsPage
-	if err := c.get("/v1/facts", q, &page); err != nil {
+	if err := c.get(ctx, "/v1/facts", "/v1/facts", q, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
@@ -221,11 +246,11 @@ func (c *apiClient) listFacts(project, factType, severity string, since, limit i
 
 // allProjectFacts pages through every fact for a project. Only the project
 // slug is sent to the server — never the caller's running version.
-func (c *apiClient) allProjectFacts(project string) ([]Fact, error) {
+func (c *apiClient) allProjectFacts(ctx context.Context, project string) ([]Fact, error) {
 	var all []Fact
 	since := 0
 	for {
-		page, err := c.listFacts(project, "", "", since, 200)
+		page, err := c.listFacts(ctx, project, "", "", since, 200)
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +262,7 @@ func (c *apiClient) allProjectFacts(project string) ([]Fact, error) {
 	}
 }
 
-func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
+func (c *apiClient) factsByEntity(ctx context.Context, name, kind string) ([]Fact, error) {
 	q := url.Values{}
 	q.Set("name", name)
 	if kind != "" {
@@ -246,7 +271,7 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 	var out struct {
 		Facts []Fact `json:"facts"`
 	}
-	if err := c.get("/v1/facts/by-entity", q, &out); err != nil {
+	if err := c.get(ctx, "/v1/facts/by-entity", "/v1/facts/by-entity", q, &out); err != nil {
 		return nil, err
 	}
 	return out.Facts, nil
@@ -257,26 +282,28 @@ func (c *apiClient) factsByEntity(name, kind string) ([]Fact, error) {
 // listReleases fetches the newest N reviewed releases of a project as light
 // summaries — the recency path (v0.4.0): list_facts is an oldest-first sync
 // feed, so "recent releases of X" questions must not be answered from it.
-func (c *apiClient) listReleases(project string, limit int) (json.RawMessage, error) {
+func (c *apiClient) listReleases(ctx context.Context, project string, limit int) (json.RawMessage, error) {
 	var raw json.RawMessage
 	q := url.Values{"limit": {strconv.Itoa(limit)}}
-	if err := c.get("/v1/releases/"+url.PathEscape(project), q, &raw); err != nil {
+	if err := c.get(ctx, "/v1/releases/{project}", "/v1/releases/"+url.PathEscape(project), q, &raw); err != nil {
 		return nil, err
 	}
 	return raw, nil
 }
 
-func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (json.RawMessage, error) {
+func (c *apiClient) getRelease(ctx context.Context, project, versionTag string, includeRaw bool) (json.RawMessage, error) {
 	var raw json.RawMessage
 	path := "/v1/releases/" + url.PathEscape(project)
+	endpoint := "/v1/releases/{project}"
 	if versionTag != "" {
 		path += "/" + url.PathEscape(versionTag)
+		endpoint = "/v1/releases/{project}/{version}"
 	}
 	var q url.Values
 	if includeRaw {
 		q = url.Values{"include": {"raw"}}
 	}
-	if err := c.get(path, q, &raw); err != nil {
+	if err := c.get(ctx, endpoint, path, q, &raw); err != nil {
 		return nil, err
 	}
 	return raw, nil
@@ -285,14 +312,18 @@ func (c *apiClient) getRelease(project, versionTag string, includeRaw bool) (jso
 // projectTracked probes the version-less latest-release route (v0.3.0):
 // 200 = tracked project, 404 = unknown slug. check_stack uses it so zero
 // facts from an untracked project is never mistaken for audited silence.
-func (c *apiClient) projectTracked(project string) (bool, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/v1/releases/"+url.PathEscape(project), nil)
+func (c *apiClient) projectTracked(ctx context.Context, project string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/releases/"+url.PathEscape(project), nil)
 	if err != nil {
 		return false, err
 	}
 	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
+	if tp := traceparentFrom(ctx); tp != "" {
+		req.Header.Set("traceparent", tp)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		slog.ErrorContext(ctx, "upstream fetch failed", "upstream", "/v1/releases/{project}", "kind", errKind(err))
 		return false, err
 	}
 	defer resp.Body.Close()
@@ -301,8 +332,12 @@ func (c *apiClient) projectTracked(project string) (bool, error) {
 	case http.StatusOK:
 		return true, nil
 	case http.StatusNotFound:
+		// The probe's answer, not a failure: 404 here MEANS "not tracked".
 		return false, nil
 	default:
+		if resp.StatusCode >= 500 {
+			slog.ErrorContext(ctx, "upstream error", "upstream", "/v1/releases/{project}", "status", resp.StatusCode)
+		}
 		return false, fmt.Errorf("tracking probe: HTTP %d", resp.StatusCode)
 	}
 }
@@ -310,9 +345,9 @@ func (c *apiClient) projectTracked(project string) (bool, error) {
 // listProjects fetches the tracked-project roster — the canonical slug list
 // agents resolve against before check_stack/get_release (v0.3.2 slug-discovery
 // gap fix: kagent guessed slugs and only learned via tracked:false).
-func (c *apiClient) listProjects() (json.RawMessage, error) {
+func (c *apiClient) listProjects(ctx context.Context) (json.RawMessage, error) {
 	var raw json.RawMessage
-	if err := c.get("/v1/projects", nil, &raw); err != nil {
+	if err := c.get(ctx, "/v1/projects", "/v1/projects", nil, &raw); err != nil {
 		return nil, err
 	}
 	return raw, nil

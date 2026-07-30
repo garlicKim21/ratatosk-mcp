@@ -18,6 +18,23 @@ Changes are collected here and shipped together at the next version bump.
   stateful, so existing installs see no transport change; stdio speaks every
   revision regardless.
 
+### Operational error log (P1) + trace propagation (P2)
+
+- The request path is no longer silent when sick: one-line JSON via `log/slog`
+  to stderr (`service:"mcp"` house schema — collectors lift `level` into a
+  severity label with no config). Levels are disciplined: upstream 5xx /
+  timeout / connection refused = ERROR, 429 = WARN, **a client mistake is
+  never an ERROR** (unknown slug or bad params surface at DEBUG only —
+  `MCP_LOG=debug`, chart `logLevel`). Error fields are *reconstructed*
+  (endpoint pattern, status, error kind), never copied — upstream URLs embed
+  running versions, and the argument-free invariant now has a CI probe test
+  watching text and JSON fields alike.
+- W3C trace context, phase 0: a `traceparent` sent in `_meta` (MCP 2026-07-28
+  convention) is validated, stamped as `trace_id` on every log line of that
+  call, and forwarded as the standard header on the upstream `/v1` request —
+  conversation → agent → MCP → upstream joins into one trace with no OTel
+  SDK and no exporter. Malformed values are dropped, not forwarded.
+
 ### check_stack: self-nullifying target_version guard — from the 20-run M2 campaign
 
 - A `target_version` at or below the running version defines the empty range
