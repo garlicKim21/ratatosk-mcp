@@ -25,6 +25,30 @@ hosted-endpoint decision (post-launch, separate track) *depends on* P1
 existing — operating a public endpoint without an error log is not on the
 table — and makes P4 more valuable, but nothing here waits for it.
 
+## P0 findings (2026-07-30, measured on go-sdk v1.7.0)
+
+- **Dual revision is native.** The SDK ships all five revisions (2024-11-05 →
+  2026-07-28). Wire-probed against our server: a legacy `initialize`
+  handshake (2025-06-18 and 2024-11-05 shapes, i.e. what the kagent Go ADK
+  sends) negotiates the client's own version and works in BOTH transport
+  modes; the deprecated handshake caps at 2025-11-25 by SDK design.
+- **2026-07-28 over HTTP requires `Stateless`.** A stateful server answers
+  new-revision calls with an explicit 400 pointing at the option. Decision:
+  `MCP_HTTP_STATELESS=1` env + chart value `statelessHttp` (default **off** —
+  inert-by-default; existing installs keep their transport behavior
+  bit-for-bit). stdio speaks every revision regardless.
+- **Stateless mode measured**: legacy `initialize` still served (temporary
+  session, no `Mcp-Session-Id`), handshake-free 2026-07-28 `tools/call`
+  works (needs `Mcp-Protocol-Version` + `Mcp-Method` + `Mcp-Name` headers and
+  `_meta` `io.modelcontextprotocol/{protocolVersion,clientCapabilities}`),
+  `server/discover` returns all five `supportedVersions` with
+  `cacheScope:"public"`, GET/DELETE answer 405.
+- **`_meta` trace keys: the SDK does nothing natively.** v1.7.0 consults
+  `_meta` only for its own `io.modelcontextprotocol/*` protocol keys; there
+  is no traceparent/OTel handling anywhere in the request path (grep and
+  wire-probe agree). P2 is therefore entirely ours: read `traceparent` from
+  `_meta`, stamp, forward.
+
 Context: as of 0.4.1 the server logs almost nothing — three statements in the
 whole codebase (one startup line, two fatals), and the request path is silent.
 An empirical probe (a `check_stack` call carrying marker strings through both

@@ -125,13 +125,26 @@ func main() {
 	// inspector), streamable HTTP for the in-cluster Service the Helm chart
 	// deploys — agents in the cluster connect to http://<svc>:8080/mcp.
 	if addr := os.Getenv("MCP_HTTP_ADDR"); addr != "" {
-		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+		// MCP_HTTP_STATELESS=1 serves every POST on a temporary session: no
+		// Mcp-Session-Id round-trip, GET/DELETE answer 405 — and, per go-sdk
+		// v1.7.0, it is the only HTTP mode that speaks the 2026-07-28 revision
+		// (stdio speaks it regardless). Default stays stateful so existing
+		// in-cluster clients see no behavior change; hosted endpoints and
+		// horizontally-scaled installs are what the flag is for.
+		stateless := os.Getenv("MCP_HTTP_STATELESS") == "1"
+		handler := mcp.NewStreamableHTTPHandler(
+			func(*http.Request) *mcp.Server { return server },
+			&mcp.StreamableHTTPOptions{Stateless: stateless})
 		mux := http.NewServeMux()
 		mux.Handle("/mcp", handler)
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
-		log.Printf("ratatosk-mcp: streamable HTTP on %s/mcp (upstream %s)", addr, base)
+		mode := "stateful"
+		if stateless {
+			mode = "stateless"
+		}
+		log.Printf("ratatosk-mcp: streamable HTTP on %s/mcp (%s, upstream %s)", addr, mode, base)
 		log.Fatal(http.ListenAndServe(addr, mux))
 	}
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

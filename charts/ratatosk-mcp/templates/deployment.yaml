@@ -27,6 +27,10 @@ spec:
               value: ":{{ .Values.service.port }}"
             - name: RATATOSK_URL
               value: {{ .Values.ratatoskUrl | quote }}
+{{- if .Values.statelessHttp }}
+            - name: MCP_HTTP_STATELESS
+              value: "1"
+{{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

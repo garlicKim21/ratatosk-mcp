@@ -9,6 +9,12 @@ image:
 # Upstream facts API. Point at a mirror if you proxy egress.
 ratatoskUrl: https://ratatosk.io
 
+# Serve HTTP without per-session state: no Mcp-Session-Id round-trip, and the
+# only HTTP mode that speaks the 2026-07-28 protocol revision (older clients
+# keep working either way — measured). Default off so existing installs see
+# no transport change; turn on for horizontally-scaled or hosted setups.
+statelessHttp: false
+
 service:
   type: ClusterIP
   port: 8080
