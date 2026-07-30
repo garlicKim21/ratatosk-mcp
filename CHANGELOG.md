@@ -7,6 +7,8 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+## [0.5.1] — 2026-07-30
+
 ### Agent definition rev 14 — what-to-check becomes roster data
 
 - The third campaign confirmed prompt attention is zero-sum: tightening
