@@ -1,9 +1,29 @@
 # Design note: logging, audit, and trace integration
 
-Status: **accepted direction, mostly unimplemented.** The error log ships with
-the post-0.4.1 SDK bump; the audit log waits for the first enterprise ask; the
-trace phases are marked below. This note exists so those conversations start
-from a position instead of a blank page.
+Status: **adopted roadmap (2026-07-30).** The goal is a product an operator
+can adopt without a leap of faith: failures make noise, enterprises can audit
+inside their own perimeter, a conversation is traceable down to the upstream
+API call — and the privacy invariant (argument-free by default) survives all
+of it. We build the whole ladder deliberately, ahead of demand; what keeps
+that from burdening casual users is that **every capability defaults to
+inert** (quiet logs, audit off, exporter off).
+
+## Roadmap
+
+| Phase | What | Gate / prerequisite | Done means |
+|---|---|---|---|
+| **P0** | go-sdk v1.6.1 → v1.7.0, dual-revision (2026-07-28 + legacy) support | Hub re-campaign results reviewed; bump decision | tests + chart-smoke green; legacy client (kagent) negotiation verified live; `Stateless` option measured and decided; what the SDK does natively with `_meta` trace keys is written down |
+| **P1** | Operational error log (spec below) | with P0 | probe CI test guards the invariant; a forced upstream failure shows one ERROR line in `kubectl logs`; collector lifts `level` into a severity label without config |
+| **P2** | Trace phase 0: read `traceparent` from `_meta`, stamp `trace_id` into logs, forward the header upstream | with P0/P1 | a request carrying a traceparent produces a log line with the same trace_id, and the upstream HTTP request carries the header (integration test) |
+| **P3** | Audit stream (spec below): `MCP_AUDIT=metadata\|full` | after P1 ships | dogfooding: a kagent conversation's tool calls reconstructed from the audit stream alone; docs (3 languages) state the layer boundary; default-off verified by the probe test |
+| **P4** | Trace phase 1: real spans, OTLP export gated on `OTEL_EXPORTER_OTLP_ENDPOINT` | after P2; needs a collector to test against | spans visible in a local collector in the smoke rig; endpoint unset ⇒ bit-identical behavior to P2 |
+| **P5** | Upstream joins the trace: ratatosk.io `/v1` accepts/propagates traceparent, web logs carry trace_id | app-repo work; after P2 | one trace id resolves across MCP log and web log for the same call |
+
+Release mapping: P0–P2 bundle into the next tagged release (its headline:
+MCP 2026-07-28 support). P3 and P4 ride whichever bump comes after. The
+hosted-endpoint decision (post-launch, separate track) *depends on* P1
+existing — operating a public endpoint without an error log is not on the
+table — and makes P4 more valuable, but nothing here waits for it.
 
 Context: as of 0.4.1 the server logs almost nothing — three statements in the
 whole codebase (one startup line, two fatals), and the request path is silent.
@@ -29,7 +49,7 @@ the installed deployment the data never leaves the operator's own cluster.
 This invariant is testable: the marker-string probe becomes a CI test the day
 the error log lands, and it watches JSON fields as well as text.
 
-## Operational error log (ships with the SDK bump)
+## Operational error log (P1)
 
 One-line JSON via `log/slog`, the same house schema as the ratatosk worker
 (`time`, `level`, `msg`, `service:"mcp"`, plus event fields):
@@ -57,7 +77,7 @@ Logging them at ERROR lets one confused agent's typo loop page an operator
 while a real outage drowns in the noise. The bar for ERROR is: *an operator
 can fix it.* Client mistakes surface at DEBUG only.
 
-## Audit log (designed; build on first enterprise demand)
+## Audit log (P3)
 
 The operational log answers "is the system sick"; an audit log answers "who
 did what", and its whole point is request content. The two do not conflict —
@@ -89,7 +109,7 @@ Shape when built:
   record cannot manufacture it and the docs must say so. The join key across
   layers is the trace context below.
 
-## Trace integration (OpenTelemetry)
+## Trace integration (P2 / P4 / P5)
 
 MCP 2026-07-28 documents `_meta` conventions for W3C trace context
 (`traceparent`, `tracestate`, `baggage`). That gives a standard way to stitch
