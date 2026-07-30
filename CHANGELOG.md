@@ -7,6 +7,22 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### Audit stream (P3) — who did what, inside your own perimeter
+
+- `MCP_AUDIT=metadata` (chart `auditMode`) emits one `event:"audit"` JSON
+  line per tool call: tool, outcome (`ok`/`tool_error`/`error`), caller
+  `clientInfo`, transport, argument *names*, and `trace_id` when the caller
+  sent trace context. `full` adds argument values. Default **off**, and the
+  off path is regression-tested to emit zero bytes.
+- The stream lands in the operator's own collectors — the same property
+  that keeps versions private (data stays home) is what makes calls
+  auditable at home. Retention and tamper-evidence stay the log platform's
+  job; route on `event=audit`.
+- Layer honesty, in the docs (en/ko/ja): this server has no authentication,
+  so a record attests which *client* called which tool with which
+  arguments — which *human* prompted the agent is the agent layer's
+  knowledge, and an MCP-layer record cannot manufacture it.
+
 ### Agent definition rev 15 — existence mandated, observability separated
 
 - The fourth campaign's edge case: cluster_core told agents to check etcd,

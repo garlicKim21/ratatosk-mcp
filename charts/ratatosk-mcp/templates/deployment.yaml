@@ -35,6 +35,10 @@ spec:
             - name: MCP_LOG
               value: {{ .Values.logLevel | quote }}
 {{- end }}
+{{- if .Values.auditMode }}
+            - name: MCP_AUDIT
+              value: {{ .Values.auditMode | quote }}
+{{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

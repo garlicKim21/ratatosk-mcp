@@ -33,6 +33,7 @@ var api *apiClient
 
 func main() {
 	setupLogging()
+	initAudit()
 	base := os.Getenv("RATATOSK_URL")
 	if base == "" {
 		base = "https://ratatosk.io"
@@ -127,6 +128,10 @@ func main() {
 			"In brief mode, facts sharing one quoted sentence are merged with their ids listed together. " +
 			"Drill down with get_release or facts_by_entity.",
 	}, checkStackTool)
+
+	// Audit stream (P3): observes tools/call when MCP_AUDIT is set; the
+	// identity function otherwise. See audit.go and docs/logging-design.md.
+	server.AddReceivingMiddleware(auditMiddleware)
 
 	// Two transports, one binary: stdio for local agents (Claude Code, MCP
 	// inspector), streamable HTTP for the in-cluster Service the Helm chart

@@ -105,6 +105,20 @@ the versions in the question.
 |---|---|---|
 | `RATATOSK_URL` | `https://ratatosk.io` | Upstream facts API (`/v1`, public, read-only) |
 | `MCP_HTTP_ADDR` | *(empty)* | When set (e.g. `:8080`), serve streamable HTTP instead of stdio |
+| `MCP_HTTP_STATELESS` | *(off)* | `1` serves HTTP without per-session state — no `Mcp-Session-Id`, and the only HTTP mode that speaks the 2026-07-28 protocol revision (chart: `statelessHttp`) |
+| `MCP_LOG` | `info` | `debug` adds per-call timing. Logs are one-line JSON on stderr and carry **no request arguments at any level** — error text is reconstructed, never copied (chart: `logLevel`) |
+| `MCP_AUDIT` | *(off)* | `metadata` emits one `event:"audit"` JSON line per tool call (tool, outcome, caller clientInfo, argument *names*); `full` adds argument values (chart: `auditMode`) |
+
+**Audit stream, plainly**: it runs inside your cluster and lands in your
+collectors — the data never leaves your perimeter, which is the point.
+Retention and tamper-evidence are your log platform's job; route on
+`event=audit`. And one honest boundary: this server has no authentication,
+so "caller" means the self-reported `clientInfo` plus what the transport
+shows. The record attests *which client called which tool with which
+arguments* — which human prompted the agent is knowledge only the agent
+layer holds, and no MCP-layer record can manufacture it. A caller-sent
+`traceparent` is stamped on the record as `trace_id`, the join key across
+those layers.
 
 ## Container image
 

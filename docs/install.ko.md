@@ -102,6 +102,19 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 |---|---|---|
 | `RATATOSK_URL` | `https://ratatosk.io` | 업스트림 facts API (`/v1`, 공개, 읽기 전용) |
 | `MCP_HTTP_ADDR` | *(없음)* | 설정 시(예: `:8080`) stdio 대신 스트리밍 HTTP로 서빙 |
+| `MCP_HTTP_STATELESS` | *(꺼짐)* | `1`이면 세션 상태 없는 HTTP — `Mcp-Session-Id` 왕복이 없고, HTTP에서 2026-07-28 프로토콜 리비전을 말하는 유일한 모드 (차트: `statelessHttp`) |
+| `MCP_LOG` | `info` | `debug`는 호출별 시간을 추가. 로그는 stderr에 JSON 한 줄이며 **어느 레벨에서도 요청 인자를 담지 않음** — 오류문은 복사가 아니라 재구성 (차트: `logLevel`) |
+| `MCP_AUDIT` | *(꺼짐)* | `metadata`는 도구 호출마다 `event:"audit"` JSON 한 줄(도구·결과·호출자 clientInfo·인자 *이름*), `full`은 인자 값까지 (차트: `auditMode`) |
+
+**감사 스트림을 있는 그대로 말하면**: 이 스트림은 당신의 클러스터 안에서
+나와 당신의 콜렉터에 쌓입니다 — 데이터가 경계를 안 벗어나는 것이 핵심입니다.
+보존 기간과 위변조 방지는 로그 플랫폼의 몫이며, `event=audit`으로 라우팅하면
+됩니다. 정직한 경계 하나: 이 서버에는 인증이 없으므로 "호출자"란 자가 보고된
+`clientInfo`와 전송 계층이 보여주는 것까지입니다. 기록이 증명하는 것은
+*어느 클라이언트가 어떤 도구를 어떤 인자로 불렀는가*까지이고 — 어떤 사람이
+에이전트에게 시켰는가는 에이전트 계층만 아는 지식이라 MCP 계층의 기록이
+만들어낼 수 없습니다. 호출자가 보낸 `traceparent`는 기록에 `trace_id`로
+찍혀 그 계층들을 잇는 조인 키가 됩니다.
 
 ## 컨테이너 이미지
 

@@ -20,6 +20,13 @@ statelessHttp: false
 # docs/logging-design.md, "the invariant").
 logLevel: ""
 
+# Audit stream (MCP_AUDIT): "" = off (default). "metadata" records one JSON
+# line per tool call (event:"audit") with tool, outcome, caller clientInfo and
+# argument NAMES; "full" adds argument values. Emitted inside YOUR cluster to
+# YOUR collectors — the data never leaves the perimeter, which is the point.
+# Retention and tamper-evidence are the collector's job; route on event=audit.
+auditMode: ""
+
 service:
   type: ClusterIP
   port: 8080
