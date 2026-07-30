@@ -276,7 +276,7 @@ func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getRelea
 type stackComponent struct {
 	Project       string `json:"project" jsonschema:"project slug, e.g. envoy"`
 	Version       string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
-	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination: only facts with running < version <= target are returned"`
+	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination, strictly above the running version: only facts with running < version <= target are returned; a target at or below running would make that range empty and is ignored with a note"`
 	// VersionSource is an audit trail, never a check: this server cannot see the
 	// caller's environment and therefore cannot tell a real citation from an
 	// invented one. What it buys is a machine-readable claim to compare against
@@ -407,6 +407,28 @@ func confessionNote(src string) string {
 		"self-described inferred version was wrong", src)
 }
 
+// resolveTarget parses target_version against the running version. A target
+// at or below running asks for the range (running, target], which is empty by
+// construction — in measurement, five of twenty agent runs sent exactly
+// running-as-target and read the guaranteed zero facts as "no issues". An
+// empty-by-construction range is therefore refused loudly (field ignored,
+// note says why and teaches the intended use) instead of honored silently.
+func resolveTarget(currentKey []int, targetRaw string) ([]int, string) {
+	if targetRaw == "" {
+		return nil, ""
+	}
+	targetKey := version.NormalizeVersion(targetRaw)
+	if targetKey == nil {
+		return nil, "target_version could not be parsed; ignored"
+	}
+	if version.Compare(targetKey, currentKey) <= 0 {
+		return nil, fmt.Sprintf("target_version (%s) is not above the running version, so the checked range "+
+			"(running, target] is empty by construction — the field was ignored and the full upgrade path is shown. "+
+			"To preview one upgrade hop, keep version = what is running now and set target_version to the destination.", targetRaw)
+	}
+	return targetKey, ""
+}
+
 func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkStackArgs) (*mcp.CallToolResult, any, error) {
 	if len(args.Components) == 0 {
 		return errResult(fmt.Errorf("components is required")), nil, nil
@@ -443,11 +465,9 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			reports = append(reports, rep)
 			continue
 		}
-		var targetKey []int
-		if comp.TargetVersion != "" {
-			if targetKey = version.NormalizeVersion(comp.TargetVersion); targetKey == nil {
-				notes = append(notes, "target_version could not be parsed; ignored")
-			}
+		targetKey, targetNote := resolveTarget(currentKey, comp.TargetVersion)
+		if targetNote != "" {
+			notes = append(notes, targetNote)
 		}
 		facts, err := api.allProjectFacts(comp.Project)
 		if err != nil {

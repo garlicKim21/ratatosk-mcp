@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/garlicKim21/ratatosk-mcp/internal/version"
 )
@@ -266,3 +272,88 @@ func TestConditionPhrase(t *testing.T) {
 	}
 }
 
+
+// A target at or below the running version defines an empty range — measured
+// agent runs sent exactly that and read the guaranteed zero as "no issues".
+// The guard must drop the field (so facts return) and say why in the note.
+func TestResolveTarget(t *testing.T) {
+	running := version.NormalizeVersion("v1.36.8")
+	cases := []struct {
+		name, target string
+		wantKey      bool
+		wantNoteSub  string
+	}{
+		{"absent", "", false, ""},
+		{"unparseable", "latest", false, "could not be parsed"},
+		{"equal to running", "v1.36.8", false, "empty by construction"},
+		{"below running", "v1.36.7", false, "empty by construction"},
+		{"spelling variant of running", "1.36.8", false, "empty by construction"},
+		{"above running", "v1.36.9", true, ""},
+	}
+	for _, c := range cases {
+		key, note := resolveTarget(running, c.target)
+		if (key != nil) != c.wantKey {
+			t.Errorf("%s: targetKey presence = %v, want %v", c.name, key != nil, c.wantKey)
+		}
+		if c.wantNoteSub == "" && note != "" {
+			t.Errorf("%s: unexpected note %q", c.name, note)
+		}
+		if c.wantNoteSub != "" && !strings.Contains(note, c.wantNoteSub) {
+			t.Errorf("%s: note %q does not contain %q", c.name, note, c.wantNoteSub)
+		}
+	}
+}
+
+// Acceptance criterion from the 2026-07-30 hub campaign (proposal 6): replaying
+// the self-nullifying call — target_version equal to the running version —
+// must bring the action_required facts back instead of a silent zero.
+func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
+	// Wire-shape fixture (references/affected envelopes), because Fact
+	// round-trips through custom (Un)MarshalJSON that preserves the raw form.
+	page := `{"facts":[
+		{"fact_id":1,"project":"envoy","version":"v1.36.9","fact_type":"security_fix","severity":"high","mandatory":true,"issue_key":"sec-1","references":{"quote":"crash"}},
+		{"fact_id":2,"project":"envoy","version":"v1.36.9","fact_type":"default_changed","severity":"medium","mandatory":true,"issue_key":"def-1"},
+		{"fact_id":3,"project":"envoy","version":"v1.36.7","fact_type":"security_fix","severity":"high","mandatory":true,"issue_key":"old-1"}]}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/facts" {
+			t.Errorf("unexpected upstream path %s", r.URL.Path)
+		}
+		w.Write([]byte(page))
+	}))
+	defer ts.Close()
+	orig := api
+	api = newAPIClient(ts.URL)
+	defer func() { api = orig }()
+
+	res, _, err := checkStackTool(context.Background(), nil, checkStackArgs{
+		Components: []stackComponent{{Project: "envoy", Version: "v1.36.8", TargetVersion: "v1.36.8"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Components []struct {
+			Summary struct {
+				NewFacts int `json:"new_facts"`
+			} `json:"summary"`
+			ActionRequired []struct {
+				FactID int `json:"fact_id"`
+			} `json:"action_required"`
+			Note string `json:"note"`
+		} `json:"components"`
+	}
+	text := res.Content[0].(*mcp.TextContent).Text
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal tool output: %v", err)
+	}
+	c := out.Components[0]
+	if c.Summary.NewFacts != 2 {
+		t.Errorf("new_facts = %d, want 2 (facts above running, target ignored)", c.Summary.NewFacts)
+	}
+	if len(c.ActionRequired) != 1 || c.ActionRequired[0].FactID != 1 {
+		t.Errorf("action_required = %+v, want exactly fact 1 back", c.ActionRequired)
+	}
+	if !strings.Contains(c.Note, "empty by construction") {
+		t.Errorf("note %q must explain the ignored target", c.Note)
+	}
+}
