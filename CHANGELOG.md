@@ -7,6 +7,19 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### Agent definition rev 15 — existence mandated, observability separated
+
+- The fourth campaign's edge case: cluster_core told agents to check etcd,
+  and where etcd lives outside the k8s API nine of twenty runs passed a
+  guessed version (all confessed, all caught by the chain — no harm, but
+  structural tension). `/v1/projects` cluster_core entries now carry a
+  `visibility` hint stating the component's observation properties — never
+  a distribution list; "true even for tomorrow's distro" is the admission
+  test. The prompt answers the hint in one move: unreadable-by-design is
+  this cluster being normal — report under "Could not check" citing the
+  hint, never guess. `list_projects` description documents the field; one
+  new guard clause in check-agent-prompt.sh.
+
 ## [0.5.1] — 2026-07-30
 
 ### Agent definition rev 14 — what-to-check becomes roster data

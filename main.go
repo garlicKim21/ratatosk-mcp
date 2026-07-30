@@ -53,7 +53,9 @@ func main() {
 			"under other names in clusters (an image or workload matching an alias belongs to that project " +
 			"at the version its tag says), and cluster_core:true on the cluster substrate (control plane, " +
 			"datastore, DNS, runtime, CNI/dataplane) — every cluster_core project present in a cluster " +
-			"belongs in its check_stack call. Small response, no arguments — " +
+			"belongs in its check_stack call. Some cluster_core entries carry a visibility hint (how the " +
+			"component is observed and where it can legitimately be unreadable — e.g. etcd may live outside " +
+			"the k8s API): an unreadable one is reported as unchecked, never guessed. Small response, no arguments — " +
 			"call this FIRST when you are unsure of a slug instead of guessing (a wrong slug shows up " +
 			"as tracked:false in check_stack).",
 	}, listProjectsTool)

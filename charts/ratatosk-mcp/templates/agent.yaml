@@ -26,6 +26,13 @@ spec:
             attention this run. Measured runs proved attention is zero-sum
             (coredns coverage halved the moment envoy enumeration was
             tightened); the roster flag is how nothing falls into the shadow.
+            Some cluster_core entries carry a visibility hint — how that
+            component is observed and where it can legitimately be unreadable.
+            When the hint says a component may be out of reach and you cannot
+            read it, that is this cluster being normal, not a gap to fill:
+            report it under "Could not check" citing the hint — measured runs
+            that guessed a version instead produced confident wrong input
+            nothing downstream could repair.
           - Use check_stack with the component versions the user gives you.
 {{- if .Values.kagent.agent.k8sTools }}
             If none are given, discover them yourself with the read-only k8s
