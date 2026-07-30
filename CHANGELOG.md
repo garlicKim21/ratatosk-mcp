@@ -7,6 +7,8 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+## [0.5.0] — 2026-07-30
+
 ### MCP 2026-07-28 revision support (go-sdk v1.7.0)
 
 - **SDK bump v1.6.1 → v1.7.0.** All five protocol revisions (2024-11-05 →
