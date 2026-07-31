@@ -67,7 +67,7 @@ func main() {
 		Description: "Incremental SYNC feed of release facts (typed, entity-level changes: security fixes, " +
 			"removals, deprecations, renames, defaults) for CNCF/cloud-native projects. " +
 			"Ordered by fact_id ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
-			"page through with since=<returned next_since> until it stops growing. " +
+			"page through with since=<returned next_since> until next_since comes back null. " +
 			"Built for keeping a local copy up to date. For 'what is the latest release of X' or " +
 			"'recent releases of X', use get_release (omit version for the newest) instead. " +
 			"Optionally filter by project/type/severity. " +
