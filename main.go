@@ -43,7 +43,8 @@ func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: buildVersion}, &mcp.ServerOptions{
 		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
-			"Upstream is rate-limited to 60 requests/minute per IP; prefer check_stack for stack-wide questions " +
+			"Upstream is rate-limited to 60 requests/minute per caller (a hosted endpoint shares one caller budget); " +
+			"prefer check_stack for stack-wide questions " +
 			"over polling list_facts per project.",
 	})
 
