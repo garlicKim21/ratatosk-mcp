@@ -107,8 +107,9 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "check_stack",
 		Description: "Check the user's running component versions against known facts. Versions are compared " +
-			"LOCALLY — only project slugs are sent to the ratatosk server, running versions never leave this process " +
-			"(this tool never calls the server-side /v1/upgrade endpoint). " +
+			"INSIDE THIS SERVER PROCESS — only project slugs are sent upstream, and this tool never calls the " +
+			"server-side /v1/upgrade endpoint. Run the server yourself and running versions never leave your " +
+			"infrastructure; on the hosted endpoint they transit server memory only and are not logged. " +
 			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
 			"Default is a briefing: summary counts, then critical/high facts split by whether the caller still has to " +
 			"check something — action_required applies to everyone, check_config applies only if its applies_if holds " +
