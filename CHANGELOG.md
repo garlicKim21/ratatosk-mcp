@@ -3,9 +3,18 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
-## [Unreleased]
+## [0.6.1] — 2026-07-31
 
-Changes are collected here and shipped together at the next version bump.
+### Tool descriptions read true from the hosted endpoint
+
+- ratatosk.io now runs this server as a public hosted endpoint
+  (`https://ratatosk.io/mcp`), and two baked-in strings were written when
+  "the process" could only mean the caller's own. `check_stack` no longer
+  says versions "never leave this process" — it scopes the claim per mode:
+  comparison inside the server process; self-hosted, versions never leave
+  your infrastructure; hosted, they transit server memory only and are not
+  logged. The server instructions now state the upstream rate limit per
+  caller, noting a hosted endpoint shares one caller budget.
 
 ### Audit records carry the transport session id
 
