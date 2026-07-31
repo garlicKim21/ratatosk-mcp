@@ -20,14 +20,46 @@
 
 In Norse myth, Ratatosk is the squirrel that carries messages up and down the
 world tree. This one carries release intelligence. [ratatosk.io](https://ratatosk.io)
-watches 74+ CNCF projects and turns every release note into typed, entity-level
+watches 76 CNCF projects and turns every release note into typed, entity-level
 facts: security fixes, breaking changes, removals, deprecations, changed
 defaults. Plain bug fixes and marketing copy are filtered out. What remains is
 what an operator acts on.
 
-This MCP server hands those facts to your agent as tools.
+This repository is the MCP server that hands those facts to your agent as
+tools. MCP (Model Context Protocol) is the open standard AI agents use to call
+external tools; any MCP-capable client — Claude Code, Claude Desktop, kagent,
+your own SDK agent — can connect. No account, no API key.
 
-## What it feels like
+## Two ways to use it
+
+**Hosted — nothing to install.** Register `https://ratatosk.io/mcp` as a
+remote MCP server in any client that supports remote connectors. The hosted
+endpoint shares one upstream rate-limit bucket (60 requests/minute) across
+all its users — for polling or CI workloads, self-host. With the Claude Code
+CLI:
+
+```bash
+claude mcp add --transport http ratatosk https://ratatosk.io/mcp
+```
+
+**Self-hosted — the same server, running as your own process.** Run it with
+Docker, the Helm chart, or a source build. With Claude Code and Docker
+installed:
+
+```bash
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.1
+```
+
+`0.6.1` is the current release; use `latest` to track releases.
+
+Either way, verify the connection:
+
+```bash
+claude mcp list
+# ratatosk: … - ✔ Connected
+```
+
+Then ask your agent a question the tools can answer:
 
 > **You:** "We run envoy v1.36.8 and istio 1.30.1. Anything we must do before upgrading?"
 >
@@ -36,47 +68,74 @@ This MCP server hands those facts to your agent as tools.
 > changed. Each fact carries a verbatim quote from the release notes as
 > evidence.
 
+Other clients (Claude Desktop, kagent, in-cluster agents) and the full setup
+reference: see the [install guide](docs/install.en.md).
+
 ## Tools
+
+Two terms the tools use: a **fact** is one extracted change from an official
+release note — a security fix, a removal, a deprecation, a changed default —
+tied to the exact identifiers it touches (a CVE id, a flag, a CRD, a config
+field), with a verbatim quote from the note as evidence. Every fact carries a
+**severity** from `info` to `critical`.
 
 | Tool | What it does |
 |---|---|
-| `list_facts` | Incremental fact feed. Filter by `project`, `type`, `severity`; poll with the `since` cursor |
-| `facts_by_entity` | Reverse index: every fact touching one identifier (CVE id, CRD, feature gate, flag, config field, dependency) |
-| `list_projects` | The tracked-project roster — resolve slugs here first, never guess |
-| `get_release` | One reviewed release: coverage, assessment, source, and all its facts. Omit `version` for the latest reviewed release of the project. `facts: []` with `coverage: full_reviewed` means the release was read and is routine. `include_raw` adds the original note body (`raw_notes`) — automatic when the review is not the full story |
-| `list_releases` | The newest N reviewed releases of one project as light summaries (fact counts by severity, max advisory-group severity), newest first — the tool for "recent releases of X". Drill into a row with `get_release` |
-| `check_stack` | Takes the component versions you run, returns a briefing on your upgrade path: critical/high facts in full, one line each for the rest, the same advisory across release branches folded into one entry. `detail: "full"` for everything verbatim, `target_version` for one upgrade hop, `severity_min` to filter |
+| `check_stack` | Takes the component versions you run and returns the facts on your upgrade path — critical/high split from the rest, one entry per advisory, each with its quote and ids. The comparison happens inside the server process — yours, if you self-host ([where your versions go](#where-your-versions-go)) |
+| `list_facts` | The incremental fact feed, oldest-analyzed first. Filter by project, type, or severity; page with the `since` cursor to keep a local copy in sync |
+| `facts_by_entity` | Reverse lookup: every fact touching one exact identifier — such as a CVE id, CRD, feature gate, flag, config field, or dependency |
+| `get_release` | One release in full: its facts, an overall assessment, and the link to the original note. A fully reviewed release with zero facts means it was read and found routine |
+| `list_releases` | The newest releases of one project as one-line summaries (date, fact counts by severity), newest first — the tool for "what changed in X lately" |
+| `list_projects` | The roster of tracked projects and their canonical slugs (the short project id every other tool takes) — look names up here instead of guessing |
 
-## Your versions stay on your side
+## Where your versions go
 
-`check_stack` sends only project slugs to the server and compares version keys
-locally, inside this process. What you run never reaches ratatosk.io. The
-server publishes facts; your agent decides what applies. The version
-normalizer is bundled (`internal/version`), so range comparison happens
-client-side too.
+**Self-hosted:** `check_stack` sends only project slugs to the server and
+compares version keys locally, inside this process — the versions you pass it
+never reach ratatosk.io. The server publishes facts; your agent decides what
+applies. The version normalizer is bundled (`internal/version`), so range
+comparison happens client-side too. This holds for upgrade questions as well:
+the upstream API has a convenience endpoint (`/v1/upgrade/{project}`) that
+receives caller-supplied versions — `check_stack` does not call it; the
+comparison is in the source you can read. One scope note: this is
+`check_stack`'s guarantee. Tools that take a version as an argument —
+`get_release(project, version)` — put that version in the upstream request
+path, because fetching a specific release means naming it. That named path is
+not kept on my side, though: before a log line is written, query strings are
+stripped and `/v1/releases/…` and `/v1/upgrade/…` paths are reduced to their
+prefix, so neither the slug nor the version lands in a log.
 
-This holds for upgrade questions as well: the upstream API has a convenience
-endpoint (`/v1/upgrade`) that receives caller-supplied versions — **check_stack
-never calls it and never will**. Upgrade-path comparison stays in this process,
-guaranteed by code you can read, not by configuration.
+**Hosted:** your `check_stack` arguments (the versions you run) pass through
+the server's memory to produce the same answer, and are not written down.
+Here is what each layer on the way keeps:
 
-## Quick start
+- the hosted MCP process itself logs only its startup line — a normal
+  request adds nothing;
+- the upstream API's request log writes one line only when the caller sends a
+  `traceparent`, and that line carries a normalized endpoint label and the
+  trace id — never a path, query, or body;
+- the front-door access log strips query strings, reduces `/v1/releases/…`
+  and `/v1/upgrade/…` paths to their prefix, masks caller IPs, and has no
+  field for request bodies.
 
-```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:latest
-```
+The hosted endpoint runs with its audit stream off, and I keep it off — not
+recording request content is the operating stance for that endpoint. One
+boundary I do not control: connection metadata at the CDN layer (Cloudflare)
+follows Cloudflare's own policy. If your requirements rule out that transit,
+self-host: then only project slugs leave your infrastructure on a
+`check_stack` call.
 
-No account, no API key. Running agents in Kubernetes, or using kagent?
-See the install guide below.
+Self-hosting also gets you the other half: an opt-in audit stream
+(`MCP_AUDIT=metadata` or `full`) that records who called which tool, emitted
+inside your own infrastructure into your own collectors. The hosted endpoint
+has none by design. Details in the [install guide](docs/install.en.md).
 
 ## Documentation
 
-| | |
-| --- | --- |
-| **[Install & usage](docs/install.en.md)** — local stdio · in-cluster (Helm) · kagent | [한국어](docs/install.ko.md) · [日本語](docs/install.ja.md) |
-| **[Helm chart](charts/ratatosk-mcp/README.md)** — values, kagent toggle | [한국어](charts/ratatosk-mcp/README.ko.md) · [日本語](charts/ratatosk-mcp/README.ja.md) |
-| **[kagent example](examples/kagent/README.md)** — manifests + ratatosk-agent | [한국어](examples/kagent/README.ko.md) · [日本語](examples/kagent/README.ja.md) |
-| **[Contributing](CONTRIBUTING.md)** · **[Security policy](SECURITY.md)** | |
+- **[Install & usage](docs/install.en.md)** — hosted endpoint · local stdio · in-cluster (Helm) · kagent ([한국어](docs/install.ko.md) · [日本語](docs/install.ja.md))
+- **[Helm chart](charts/ratatosk-mcp/README.md)** — values, kagent toggle ([한국어](charts/ratatosk-mcp/README.ko.md) · [日本語](charts/ratatosk-mcp/README.ja.md))
+- **[kagent example](examples/kagent/README.md)** — manifests + ratatosk-agent ([한국어](examples/kagent/README.ko.md) · [日本語](examples/kagent/README.ja.md))
+- **[Contributing](CONTRIBUTING.md)** · **[Security policy](SECURITY.md)**
 
 ## Upstream API
 

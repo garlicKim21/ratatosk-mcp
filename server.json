@@ -6,12 +6,12 @@
     "url": "https://github.com/garlicKim21/ratatosk-mcp",
     "source": "github"
   },
-  "version": "0.3.3",
+  "version": "0.6.1",
   "websiteUrl": "https://ratatosk.io",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/garlickim21/ratatosk-mcp:0.3.3",
+      "identifier": "ghcr.io/garlickim21/ratatosk-mcp:0.6.1",
       "transport": {
         "type": "stdio"
       }

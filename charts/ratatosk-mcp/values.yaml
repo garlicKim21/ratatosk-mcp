@@ -10,21 +10,26 @@ image:
 ratatoskUrl: https://ratatosk.io
 
 # Serve HTTP without per-session state: no Mcp-Session-Id round-trip, and the
-# only HTTP mode that speaks the 2026-07-28 protocol revision (older clients
-# keep working either way — measured). Default off so existing installs see
-# no transport change; turn on for horizontally-scaled or hosted setups.
+# only HTTP mode that supports the 2026-07-28 MCP protocol revision (older
+# clients keep working either way). Off by default; turn on when your HTTP
+# clients send the Mcp-Protocol-Version: 2026-07-28 header (a stateful server
+# answers them with HTTP 400), or when you run more than one replica.
 statelessHttp: false
 
-# Log level (MCP_LOG): "" = info. "debug" adds per-call timing — still
-# argument-free; no request content reaches logs at any level (see
-# docs/logging-design.md, "the invariant").
+# Log level (MCP_LOG): "" = info; "debug", "warn", "error" also accepted —
+# any other value silently falls back to info (no warning, so check for
+# typos). "debug" adds per-call timing — still argument-free; no request arguments
+# appear in operational log lines at any level (auditMode below is the
+# explicit opt-in that does record request content, on the same stderr
+# stream). Details in docs/install.en.md.
 logLevel: ""
 
 # Audit stream (MCP_AUDIT): "" = off (default). "metadata" records one JSON
-# line per tool call (event:"audit") with tool, outcome, caller clientInfo and
-# argument NAMES; "full" adds argument values. Emitted inside YOUR cluster to
-# YOUR collectors — the data never leaves the perimeter, which is the point.
-# Retention and tamper-evidence are the collector's job; route on event=audit.
+# line per tool call (event:"audit") with tool, outcome, caller clientInfo
+# (absent when statelessHttp is on — no session carries it) and argument
+# NAMES; "full" adds argument values. Emitted inside your cluster,
+# into your collectors; the records never leave your perimeter. Retention and
+# tamper-evidence are the collector's job; route on event=audit.
 auditMode: ""
 
 service:
