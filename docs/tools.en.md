@@ -19,7 +19,7 @@ with a verbatim quote from the note as evidence. Every fact carries a
 
 > **Measured as of 2026-07-31**: every call and response in this document was
 > sent to the hosted endpoint `https://ratatosk.io/mcp` (server
-> 0.6.1) and is reproduced from what came back. The stack used in the
+> 0.6.2) and is reproduced from what came back. The stack used in the
 > `check_stack` example — the five components and their `version_source`
 > strings — originates from a real cluster (anonymized). Release data accrues
 > hourly, so the numbers and lists will differ if you call today — the shape

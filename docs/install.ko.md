@@ -99,7 +99,7 @@ curl -s -X POST https://ratatosk.io/mcp \
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.6.1"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.6.2"}}}
 ```
 
 Claude Code라면 `claude mcp list` 출력에서 확인하세요:
@@ -149,10 +149,10 @@ stdio는 MCP 클라이언트가 서버를 자식 프로세스로 띄우고 표�
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.1
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.2
 ```
 
-`0.6.1` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
+`0.6.2` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
 쓰면 되고, 항상 최신을 따라가려면 `latest`를 쓰세요 —
 [버전 고정](#버전-고정) 참조.
 
@@ -166,7 +166,7 @@ Claude Desktop은 CLI 대신 설정 파일(`claude_desktop_config.json`)로 MCP
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.6.1"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.6.2"]
     }
   }
 }
@@ -191,7 +191,7 @@ stdio를 지원하는 MCP 클라이언트라면 무엇이든 같은 방식입니
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.1 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.2 - ✔ Connected
 ```
 
 그리고 에이전트에게 이렇게 물어보세요:
@@ -241,7 +241,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.6.1"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.6.2"}
 ```
 
 헬스 체크까지 확인하려면:
@@ -338,7 +338,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 docker로 HTTP 모드를 직접 띄우는 예:
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.6.1
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.6.2
 ```
 
 ## 로그와 감사 스트림
@@ -374,7 +374,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.6.1
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.6.2
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -387,7 +387,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 {"argument_names":["components","detail"],"client_name":"my-agent","client_version":"1.0.0","event":"audit","level":"INFO","msg":"audit","outcome":"ok","service":"mcp","time":"2026-07-31T02:54:47.029169122Z","tool":"check_stack","transport":"stdio"}
 ```
 
-0.6.1부터, 서버가 상태 유지(stateful) HTTP 모드(차트 기본값)로 돌아갈
+0.6.2부터, 서버가 상태 유지(stateful) HTTP 모드(차트 기본값)로 돌아갈
 때는 HTTP 감사 레코드에 전송 세션 식별자인 `session_id` 필드가 함께
 담깁니다(예: `"session_id":"T3E77BYZFDDA33SIUSORQ365ZL"`). 동시에 접속한
 호출자들을 세션 단위로 구분하는 값입니다. `statelessHttp`(환경 변수
@@ -454,14 +454,14 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 ## 버전 고정
 
-- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.6.1`)로 자동 빌드되며
+- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.6.2`)로 자동 빌드되며
   멀티 아치(`linux/amd64`, `linux/arm64`)입니다. `latest`는 최신 릴리스를
   따라갑니다 — 재현 가능한 배포에는 버전 태그를 고정하세요.
 - **Helm**: 차트는 차트 저장소로 발행되지 않고 저장소 클론으로만
   설치합니다. 특정 버전에 고정하려면 클론 후 릴리스 태그를 체크아웃하세요:
 
   ```bash
-  git -C ratatosk-mcp checkout v0.6.1
+  git -C ratatosk-mcp checkout v0.6.2
   ```
 
   이미지 태그는 기본적으로 차트의 `appVersion`을 따르고, `image.tag` 값으로

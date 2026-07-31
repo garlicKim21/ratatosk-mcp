@@ -3,6 +3,18 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [0.6.2] — 2026-07-31
+
+### Tool annotations, and a cursor that says how it ends
+
+- Every tool now carries a `title` and `readOnlyHint: true` — machine-readable
+  metadata saying what a human can already infer: these tools only read.
+  Clients that understand the hint can label the tools and skip write-style
+  confirmation prompts.
+- `list_facts` described its own pagination as "until it stops growing";
+  the actual protocol is `next_since: null`. The description now says so,
+  matching the docs and the web API's own wording.
+
 ## [0.6.1] — 2026-07-31
 
 ### Tool descriptions read true from the hosted endpoint
