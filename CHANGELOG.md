@@ -7,6 +7,16 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 Changes are collected here and shipped together at the next version bump.
 
+### Audit records carry the transport session id
+
+- Fifth-campaign dogfooding reconstructed a full conversation from the audit
+  stream alone, with one gap: every trace_id sat empty (the kagent Go ADK
+  does not send `_meta` traceparent yet), so attribution relied on time
+  windows — impossible with two concurrent conversations. Records now carry
+  `session_id`, the transport session identifier: honest about its layer
+  (a transport fact, not a conversation id) and enough to separate
+  concurrent stateful callers until trace context arrives from upstream.
+
 ## [0.6.0] — 2026-07-30
 
 ### Audit stream (P3) — who did what, inside your own perimeter

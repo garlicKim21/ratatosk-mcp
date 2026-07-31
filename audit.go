@@ -113,10 +113,17 @@ func auditMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 		}
 		var client *mcp.Implementation
 		transport := "stdio"
+		sessionID := ""
 		if s, ok := req.GetSession().(*mcp.ServerSession); ok {
 			if ip := s.InitializeParams(); ip != nil {
 				client = ip.ClientInfo
 			}
+			// The transport session id separates concurrent callers even when
+			// none of them sends trace context (measured: the kagent Go ADK
+			// doesn't, so trace_id sat empty and attribution fell back to time
+			// windows). Named for what it is — a transport fact, not a
+			// conversation id; the layer-honesty line does not move.
+			sessionID = s.ID()
 		}
 		if re := req.GetExtra(); re != nil && re.Header != nil {
 			transport = "http"
@@ -125,7 +132,11 @@ func auditMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 		if tp, ok := p.Meta["traceparent"].(string); ok && traceparentRe.MatchString(tp) {
 			traceID = tp[3:35]
 		}
-		auditEmit(auditRecord(auditMode, p.Name, p.Arguments, outcome, client, transport, traceID))
+		rec := auditRecord(auditMode, p.Name, p.Arguments, outcome, client, transport, traceID)
+		if sessionID != "" {
+			rec["session_id"] = sessionID
+		}
+		auditEmit(rec)
 		return res, err
 	}
 }
