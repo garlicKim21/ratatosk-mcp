@@ -50,6 +50,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_projects",
+		Annotations: &mcp.ToolAnnotations{Title: "List tracked projects", ReadOnlyHint: true},
 		Description: "Every project ratatosk tracks: slug (the canonical id all other tools take), name, " +
 			"tier (graduated|incubating), category, analyzed_releases; image_aliases where a project runs " +
 			"under other names in clusters (an image or workload matching an alias belongs to that project " +
@@ -64,6 +65,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_facts",
+		Annotations: &mcp.ToolAnnotations{Title: "Sync release facts", ReadOnlyHint: true},
 		Description: "Incremental SYNC feed of release facts (typed, entity-level changes: security fixes, " +
 			"removals, deprecations, renames, defaults) for CNCF/cloud-native projects. " +
 			"Ordered by fact_id ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
@@ -79,6 +81,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "facts_by_entity",
+		Annotations: &mcp.ToolAnnotations{Title: "Facts touching one identifier", ReadOnlyHint: true},
 		Description: "Reverse index: every fact touching one exact identifier — a CVE id, CRD, feature gate, " +
 			"flag, metric, config field, or dependency. Case-insensitive. " +
 			"Call this when you have a specific identifier (e.g. from a manifest or advisory) and want to know what changed around it.",
@@ -86,6 +89,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_release",
+		Annotations: &mcp.ToolAnnotations{Title: "One reviewed release", ReadOnlyHint: true},
 		Description: "One reviewed release: envelope (coverage, assessment, source URL) plus all its facts. " +
 			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence. " +
 			"Omit version for the latest reviewed release of the project. " +
@@ -97,6 +101,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_releases",
+		Annotations: &mcp.ToolAnnotations{Title: "Recent releases of a project", ReadOnlyHint: true},
 		Description: "The newest N reviewed releases of one project, as light summaries (version, date, " +
 			"coverage, fact counts by severity, max advisory-group severity). THE tool for " +
 			"'recent releases of X' / 'what changed in X lately' — newest first, unlike the " +
@@ -107,6 +112,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "check_stack",
+		Annotations: &mcp.ToolAnnotations{Title: "Check a running stack", ReadOnlyHint: true},
 		Description: "Check the user's running component versions against known facts. Versions are compared " +
 			"INSIDE THIS SERVER PROCESS — only project slugs are sent upstream, and this tool never calls the " +
 			"server-side /v1/upgrade endpoint. Run the server yourself and running versions never leave your " +
