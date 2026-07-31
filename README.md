@@ -18,7 +18,7 @@
 
 ---
 
-In Norse myth, Ratatosk is the squirrel that carries messages up and down the
+In Norse myth, Ratatoskr is the squirrel that carries messages up and down the
 world tree. This one carries release intelligence. [ratatosk.io](https://ratatosk.io)
 watches 76 CNCF projects and turns every release note into typed, entity-level
 facts: security fixes, breaking changes, removals, deprecations, changed
@@ -30,7 +30,7 @@ tools. MCP (Model Context Protocol) is the open standard AI agents use to call
 external tools; any MCP-capable client — Claude Code, Claude Desktop, kagent,
 your own SDK agent — can connect. No account, no API key.
 
-## Two ways to use it
+## Two ways to connect
 
 **Hosted — nothing to install.** Register `https://ratatosk.io/mcp` as a
 remote MCP server in any client that supports remote connectors. The hosted
@@ -50,7 +50,7 @@ installed:
 claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.1
 ```
 
-`0.6.1` is the current release; use `latest` to track releases.
+`0.6.1` is the current release; use `latest` to follow new ones.
 
 Either way, verify the connection:
 
@@ -81,40 +81,44 @@ field), with a verbatim quote from the note as evidence. Every fact carries a
 
 | Tool | What it does |
 |---|---|
-| `check_stack` | Takes the component versions you run and returns the facts on your upgrade path — critical/high split from the rest, one entry per advisory, each with its quote and ids. The comparison happens inside the server process — yours, if you self-host ([where your versions go](#where-your-versions-go)) |
+| `check_stack` | Takes the component versions you run and returns the facts on your upgrade path — critical/high split from the rest, one entry per advisory, each with its quote and ids. The comparison happens inside the server process — which is your own process when you self-host ([how your component versions are handled](#how-your-component-versions-are-handled)) |
 | `list_facts` | The incremental fact feed, oldest-analyzed first. Filter by project, type, or severity; page with the `since` cursor to keep a local copy in sync |
 | `facts_by_entity` | Reverse lookup: every fact touching one exact identifier — such as a CVE id, CRD, feature gate, flag, config field, or dependency |
 | `get_release` | One release in full: its facts, an overall assessment, and the link to the original note. A fully reviewed release with zero facts means it was read and found routine |
 | `list_releases` | The newest releases of one project as one-line summaries (date, fact counts by severity), newest first — the tool for "what changed in X lately" |
 | `list_projects` | The roster of tracked projects and their canonical slugs (the short project id every other tool takes) — look names up here instead of guessing |
 
-## Where your versions go
+Full per-tool parameters, example calls, and measured responses live in the [tools reference](docs/tools.en.md).
+
+## How your component versions are handled
 
 **Self-hosted:** `check_stack` sends only project slugs to the server and
-compares version keys locally, inside this process — the versions you pass it
+compares versions locally, inside this process — the versions you pass it
 never reach ratatosk.io. The server publishes facts; your agent decides what
 applies. The version normalizer is bundled (`internal/version`), so range
 comparison happens client-side too. This holds for upgrade questions as well:
 the upstream API has a convenience endpoint (`/v1/upgrade/{project}`) that
 receives caller-supplied versions — `check_stack` does not call it; the
-comparison is in the source you can read. One scope note: this is
-`check_stack`'s guarantee. Tools that take a version as an argument —
-`get_release(project, version)` — put that version in the upstream request
-path, because fetching a specific release means naming it. That named path is
-not kept on my side, though: before a log line is written, query strings are
-stripped and `/v1/releases/…` and `/v1/upgrade/…` paths are reduced to their
-prefix, so neither the slug nor the version lands in a log.
+comparison is in the source you can read.
+
+One limit on that guarantee: it covers `check_stack`. Tools that take a
+version as an argument — `get_release(project, version)` — put that version
+in the upstream request path, because fetching a specific release means
+naming it. That named path is not kept on my side, though: before a log line
+is written, query strings are stripped and `/v1/releases/…` and
+`/v1/upgrade/…` paths are reduced to their prefix, so neither the slug nor
+the version lands in a log.
 
 **Hosted:** your `check_stack` arguments (the versions you run) pass through
 the server's memory to produce the same answer, and are not written down.
 Here is what each layer on the way keeps:
 
-- the hosted MCP process itself logs only its startup line — a normal
-  request adds nothing;
-- the upstream API's request log writes one line only when the caller sends a
+- The hosted MCP process itself logs only its startup line — a normal
+  request adds nothing.
+- The upstream API's request log writes one line only when the caller sends a
   `traceparent`, and that line carries a normalized endpoint label and the
-  trace id — never a path, query, or body;
-- the front-door access log strips query strings, reduces `/v1/releases/…`
+  trace id — never a path, query, or body.
+- The front-door access log strips query strings, reduces `/v1/releases/…`
   and `/v1/upgrade/…` paths to their prefix, masks caller IPs, and has no
   field for request bodies.
 
@@ -125,7 +129,7 @@ follows Cloudflare's own policy. If your requirements rule out that transit,
 self-host: then only project slugs leave your infrastructure on a
 `check_stack` call.
 
-Self-hosting also gets you the other half: an opt-in audit stream
+Self-hosting adds the opposite capability: an opt-in audit stream
 (`MCP_AUDIT=metadata` or `full`) that records who called which tool, emitted
 inside your own infrastructure into your own collectors. The hosted endpoint
 has none by design. Details in the [install guide](docs/install.en.md).
@@ -145,8 +149,8 @@ limited at 60 requests per minute per IP.
 
 ## Data & terms
 
-The data is served by ratatosk.io free of charge (subject to change, with
-advance notice) under its [terms of service](https://ratatosk.io/terms).
+The data is served free of charge by ratatosk.io — a term that may change,
+with advance notice — under its [terms of service](https://ratatosk.io/terms).
 Analyses are AI-generated reference information with no warranty — check the
 original release notes before acting, especially when an agent acts on your
 behalf. Original notes belong to their respective projects; responses that

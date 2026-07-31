@@ -2,47 +2,52 @@
 
 [English](install.en.md) · [한국어](install.ko.md) · [日本語](install.ja.md)
 
-このページでは、Ratatosk のリリースファクトを AI エージェントから使う 4 つの
-方法を説明します — 何もインストールせずホスティングエンドポイントに接続する
-方法から、ラップトップ上の stdio サーバー、Kubernetes クラスタ内の Helm
-デプロイ、kagent 統合まで。
+このページでは、Ratatosk のリリース fact を AI エージェントから使う 4 つの
+方法を説明します。何もインストールせずホスト版エンドポイントに接続する
+方法、手元の PC で stdio サーバーを動かす方法、Kubernetes クラスタに Helm
+でデプロイする方法、そして kagent と統合する方法です。
 
 **MCP（Model Context Protocol）** は、AI エージェントが外部ツールを呼び出す
-ときに使う標準プロトコルです。ratatosk-mcp はこのプロトコルでリリース
-ファクトのツール 6 個 — `check_stack`（運用中のバージョン一覧を受け取り、
-アップグレード経路上のファクトを返す）、`list_facts`（増分ファクト
-フィード）、`facts_by_entity`（CVE・フラグなど識別子からの逆引き）、
-`get_release`（リリース 1 件の全体）、`list_releases`（プロジェクトごとの
-最新リリース要約）、`list_projects`（追跡プロジェクトと正規スラッグ）— を
-提供するサーバーで、MCP に対応したクライアントなら何でも — Claude Code、
-Claude Desktop、kagent、自作の SDK エージェント — 接続できます。
+ときに使う標準プロトコルです。ratatosk-mcp はこのプロトコルで 6 つの
+リリース fact ツールを提供するサーバーです。`check_stack`（稼働中の
+バージョン一覧を受け取り、アップグレード経路上の fact を返す）、
+`list_facts`（増分 fact フィード）、`facts_by_entity`（CVE・フラグなど
+識別子からの逆引き）、`get_release`（リリース 1 件の全体）、
+`list_releases`（プロジェクトごとの最新リリース要約）、
+`list_projects`（追跡プロジェクトと正規スラッグ）です。Claude Code、
+Claude Desktop、kagent、自作の SDK エージェントなど、MCP に対応した
+クライアントであればどれからでも接続できます。
 
 ## 実行方法を選ぶ
 
-| こんな状況なら | 方法 | セクション |
+| 利用シーン | 方法 | セクション |
 | --- | --- | --- |
-| まず試したい — 何もインストールせずに | ホスティングエンドポイントの URL を登録 | [ホスティング](#ホスティングエンドポイント) |
-| ラップトップで Claude Code / Claude Desktop など stdio MCP クライアントを使う | `docker run`（stdio） | [ローカル](#ローカルstdio) |
-| Kubernetes で独自エージェントを運用（フレームワーク不問、CI ジョブ、SDK クライアント） | Helm チャート | [クラスタ内・単独](#クラスタ内単独helm) |
-| [kagent](https://kagent.dev) を使用中 | `kagent.enabled=true` の Helm オプション、またはマニフェスト | [kagent と一緒に](#kagent-と一緒に) |
+| まず試したい — 何もインストールせずに | ホスト版エンドポイントの URL を登録 | [ホスト版](#ホスト版エンドポイント) |
+| 手元の PC で Claude Code / Claude Desktop など stdio MCP クライアントを使う | `docker run`（stdio） | [ローカル](#ローカルstdio) |
+| Kubernetes で独自エージェントを運用（フレームワーク不問、CI ジョブ、SDK クライアント） | Helm チャート | [クラスタ内デプロイ](#クラスタ内への単独デプロイhelm) |
+| [kagent](https://kagent.dev) を使用中 | `kagent.enabled=true` の Helm オプション、またはマニフェスト | [kagent 統合](#kagent-統合) |
 
-4 つの方法はいずれも同じツール 6 個で同じ公開データを提供し、どのモードでも
-アカウントも API キーも不要です。違いは 3 つです：`check_stack` に渡した
-運用中バージョンがどこまで行くか（セルフホストではバージョン比較が利用者の
-プロセス内で完結し、そのバージョンはインフラを離れません。ホスティングでは
-バージョンがサーバーメモリを通過しますが、どのログにも記録されません）、
-アップストリームのリクエスト上限を誰と分け合うか（ホスティングは共有
-バケット、セルフホストは自分の IP の枠）、監査ストリームを残せるか
-（セルフホストのみ可能）。共通点も 1 つ知っておいてください：`get_release`
-のように特定バージョンを引数に取るツールは、どの方法でもそのバージョンを
-アップストリームのリクエストパスに載せて照会します — 取得対象を名指しする
-値だからです。ただしそのパスもサーバー側のログには残りません：アクセスログが
-記録前にクエリ文字列を除去し、`/v1/releases/…`・`/v1/upgrade/…` のパスを
-プレフィックスだけに縮めるためです。詳細は各セクションで説明します。
+4 つの方法はいずれも同じ 6 つのツールで同じ公開データを提供し、どのモード
+でもアカウントも API キーも不要です。違いは 3 つあります。
+
+- **`check_stack` に渡した稼働中バージョンがどこまで行くか。** セルフホスト
+  ではバージョン比較が利用者のプロセス内で完結し、そのバージョンはインフラ
+  を離れません。ホスト版ではバージョンがサーバーメモリを通過しますが、
+  どのログにも記録されません。
+- **アップストリームのリクエスト上限を誰と分け合うか。** ホスト版は共有
+  バケットを使い、セルフホストは自分の IP の枠を使います。
+- **監査ストリームを残せるか。** セルフホストのみ可能です。
+
+共通点も 1 つあります。`get_release` のように特定バージョンを引数に取る
+ツールは、どの方法でもそのバージョンをアップストリームのリクエストパスに
+載せて取得します。取得対象を名指しする値だからです。ただしそのパスも
+サーバー側のログには残りません。アクセスログが記録前にクエリ文字列を
+除去し、`/v1/releases/…`・`/v1/upgrade/…` のパスをプレフィックスだけに
+縮めるためです。詳細は各セクションで説明します。
 
 ## 前提条件
 
-- **ホスティング**：リモート MCP サーバー（Streamable HTTP — ストリーミング
+- **ホスト版**：リモート MCP サーバー（Streamable HTTP — ストリーミング
   方式の HTTP トランスポート）に対応したクライアントがあれば十分です。
   ほかに準備するものはありません。
 - **ローカル（stdio）**：Docker。ソースからビルドするなら Go 1.26 以上。
@@ -65,14 +70,14 @@ Claude Desktop、kagent、自作の SDK エージェント — 接続できま�
 - **kagent 統合**：kagent がすでにインストールされたクラスタ（kagent CRD を
   含む）。
 
-## ホスティングエンドポイント
+## ホスト版エンドポイント
 
 `https://ratatosk.io/mcp` — インストールなしですぐ使えるリモート MCP
 エンドポイントです。Streamable HTTP で提供され、ステートレス
-（stateless）です：セッションがないため、`Mcp-Session-Id` の往復なしに
+（stateless）です。セッションがないため、`Mcp-Session-Id` の往復なしに
 リクエスト 1 つひとつが独立して処理されます。
 
-### 登録
+### クライアントへのエンドポイント登録
 
 Claude Code：
 
@@ -110,20 +115,21 @@ Claude Code なら `claude mcp list` の出力で確認してください：
 ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
 ```
 
-### 知っておくこと
+### 既知の挙動と制限
 
 - **SSE の GET は 405**：ステートレスモードはサーバー発の通知ストリーム
   （GET で開く SSE）を提供しないため、405 応答が正常な動作です。ブラウザの
   アドレスバーで開くと案内ページ（`/docs/mcp`）にリダイレクトされます。
-- **フェアユース**：ホスティング経路は、アップストリーム公開 API の
-  レート制限（毎分 60 リクエスト/IP）のバケットをほかの利用者と共有します
-  （直接 `/v1` を呼ぶときの IP ごとの枠とは別のバケットです）。ポーリングの
-  ような重い使い方が必要なら、セルフホストに切り替えてください。
+- **共有上限について**：ホスト版の経路は共有バケットを 1 つ使います。
+  アップストリーム公開 API の毎分 60 リクエスト/IP の上限を、ホスト版の
+  利用者全体で分け合うバケットです。直接 `/v1` を呼ぶ場合は、代わりに自分
+  の IP ごとの枠が使えます。ポーリングのような負荷の高い使い方が必要なら、
+  セルフホストに切り替えてください。
 
-### プライバシー — ホスティングでリクエスト内容が向かう先
+### プライバシー — ホスト版エンドポイントが記録するもの
 
-ホスティングでは、`check_stack` の引数（運用中のバージョン一覧）がサーバー
-メモリを通過します。その代わり、リクエスト内容はどこにも記録されません：
+ホスト版では、`check_stack` の引数（稼働中のバージョン一覧）がサーバー
+メモリを通過しますが、リクエスト内容はどこにも記録されません：
 
 - MCP サーバーのログには起動行とアップストリームのエラー行だけが残り、
   正常なリクエストは記録されません。エラー行にもリクエスト引数は
@@ -136,9 +142,9 @@ ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
   残し、IP をマスクし、リクエストボディの記録項目自体がありません。外部には
   送信されず、サーバーローカルでサイズ基準のローテーションが行われます
   （現在のトラフィックで数日分）。
-- 後述の監査ストリームはホスティングでは無効で、有効にすることはありません。
+- 後述の監査ストリームはホスト版では無効で、有効にすることはありません。
 
-ただし、管理の及ばない境界が 1 つあります：CDN（Cloudflare）区間の接続
+ただし、管理の及ばない境界が 1 つあります。CDN（Cloudflare）区間の接続
 メタデータは Cloudflare のポリシーに従い、これは ratatosk.io が制御できない
 領域です。この境界が要件に合わない場合はセルフホストを使ってください —
 `check_stack` に渡したバージョンがプロセスの外に出なくなります。
@@ -146,8 +152,8 @@ ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
 ## ローカル（stdio）
 
 stdio は、MCP クライアントがサーバーを子プロセスとして起動し、標準入出力で
-対話する方式です。ラップトップで Claude Code や Claude Desktop と一緒に
-使うときの基本経路です。
+やり取りする方式です。手元の PC で Claude Code や Claude Desktop と一緒に
+使うときの基本の選び方です。
 
 ### Claude Code
 
@@ -157,7 +163,7 @@ claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0
 
 `0.6.1` の部分には任意の
 [リリースタグ](https://github.com/garlicKim21/ratatosk-mcp/releases)を
-指定でき、常に最新を追うなら `latest` を使ってください —
+指定できます。常に最新を追うなら `latest` を使ってください —
 [バージョン固定](#バージョン固定)参照。
 
 ### Claude Desktop
@@ -179,7 +185,7 @@ Claude Desktop は CLI の代わりに設定ファイル
 
 設定ファイルの場所は OS ごとに異なるため、Claude Desktop のドキュメントを
 参照してください。インストールなしで使うなら、上の
-[ホスティングエンドポイント](#ホスティングエンドポイント)をリモート
+[ホスト版エンドポイント](#ホスト版エンドポイント)をリモート
 コネクタとして登録しても構いません。
 
 ### ソースからビルド
@@ -191,7 +197,7 @@ go build -o ratatosk-mcp .
 claude mcp add ratatosk -- /path/to/ratatosk-mcp
 ```
 
-stdio に対応した MCP クライアントなら何でも同じやり方です。
+stdio に対応した MCP クライアントであれば、いずれも同じ手順です。
 
 ### 確認
 
@@ -206,17 +212,17 @@ claude mcp list
 > ことはある？」
 
 エージェントが `check_stack` を呼び、現行バージョン以降のセキュリティ修正・
-削除・デフォルト値の変更を根拠の引用つきで答えれば成功です。
+削除・デフォルト値の変更を、根拠の引用とともに挙げて答えれば成功です。
 
-## クラスタ内・単独（Helm）
+## クラスタ内への単独デプロイ（Helm）
 
 `MCP_HTTP_ADDR` を設定すると、同じバイナリが `/mcp` で Streamable HTTP の
 MCP を提供します（`/healthz` ヘルスチェック付き）。チャートはこれを
 ClusterIP Service としてデプロイし、`MCP_HTTP_ADDR` を `service.port`
 （デフォルト 8080）に合わせて自動設定します。クラスタ内のどのクライアントも、
-プロセスを起動する代わりに URL で接続できます — SDK で作った独自
+プロセスを起動する代わりに URL で接続できます。SDK で作った独自
 エージェント、ほかのエージェントフレームワーク、アップグレード前に
-`check_stack` でゲートをかける CI ジョブまで。
+`check_stack` でゲートをかける CI ジョブなど、いずれも同じです。
 
 ### インストール
 
@@ -226,11 +232,11 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 ```
 
 RBAC もシークレットも不要で、Pod Security Standards（PSS）の `restricted`
-プロファイルで警告なしに動きます。チャートオプションの全体は
+プロファイルでも警告なしに動作します。チャートオプションの全体は
 [チャート README](../charts/ratatosk-mcp/README.ja.md) にまとまっています。
-MCP 仕様 2026-07-28 リビジョンを使う最新クライアントを HTTP で受けるには
-（`Mcp-Protocol-Version: 2026-07-28` ヘッダーを送るクライアントの場合）、
-またレプリカを 2 個以上に増やす予定があるなら
+MCP 仕様 2026-07-28 リビジョンを使う最新クライアント
+（`Mcp-Protocol-Version: 2026-07-28` ヘッダーを送るクライアント）を HTTP
+で受け付ける場合や、レプリカを 2 つ以上に増やす予定がある場合は、
 `--set statelessHttp=true` を有効にしてください —
 [設定リファレンス](#設定リファレンス)参照。
 
@@ -244,7 +250,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 # ratatosk-mcp-6f7b9c8d4-x2m5q    1/1     Running   0          30s
 ```
 
-起動ログの 1 行が、待ち受けアドレスとアップストリームを教えてくれます：
+起動ログの 1 行に、待ち受けアドレスとアップストリームが出力されます：
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
@@ -255,17 +261,17 @@ kubectl logs deploy/ratatosk-mcp
 
 ```bash
 kubectl port-forward svc/ratatosk-mcp 8080:8080 &
-sleep 2   # フォワードの準備前に curl が走ると connection refused になります
+sleep 2   # port-forward の準備が整う前に curl を実行すると connection refused になります
 curl -i http://localhost:8080/healthz
 # HTTP/1.1 200 OK
 ```
 
-確認が終わったら、バックグラウンドの port-forward を `kill %1` で片付けて
+確認が終わったら、バックグラウンドの port-forward を `kill %1` で終了して
 ください。
 
 ### 接続
 
-クラスタ内の MCP クライアントを次の URL に向けてください：
+クラスタ内の MCP クライアントには、次の URL を指定してください：
 
 ```
 http://ratatosk-mcp.<namespace>.svc:8080/mcp
@@ -281,12 +287,13 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 インストール時に `--set` で値を変えていた場合は、アップグレードでも同じ値を
 再指定するか `--reuse-values` を付けてください。
 
-## kagent と一緒に
+## kagent 統合
 
-等価な 2 つの経路から 1 つだけ選んでください：
+次の 2 つはどちらを選んでも結果は同じです。いずれか一方を実行してください。
 
 **A. Helm トグル** — インストール 1 回で、サーバー、kagent への登録
-（RemoteMCPServer）、サンプルエージェント `ratatosk-agent` まで：
+（RemoteMCPServer）、サンプルエージェント `ratatosk-agent` までデプロイ
+されます：
 
 ```bash
 helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
@@ -297,8 +304,8 @@ helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp \
 異なる場合は上書きし、サンプルエージェントなしで登録だけしたい場合は
 `kagent.agent.enabled=false` を設定してください。
 
-**B. マニフェスト** — 同じ 3 つの部品を Helm なしのコピー＆ペーストで
-（[詳細](../examples/kagent/README.ja.md)）：
+**B. マニフェスト** — 同じ 3 つのリソースを、Helm を使わずコピー＆ペースト
+で適用します（[詳細](../examples/kagent/README.ja.md)）：
 
 ```bash
 BASE=https://raw.githubusercontent.com/garlicKim21/ratatosk-mcp/main/examples/kagent
@@ -323,13 +330,13 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 現れない場合は[トラブルシューティング](#トラブルシューティング)を見て
 ください。
 
-> **モデルの最低要件**：エージェントの 1 ランが内部モデル呼び出しを 6 回
-> 以上発生させ、kagent Go ADK は 429（リクエスト上限超過）応答を
-> リトライしません。したがって毎分およそ 10 リクエスト以上を許容する
-> モデルティアが必要で、それより低いと実行のたびに失敗します。たとえば
-> Gemini 無料ティア（2026-07 時点）では、毎分 5 リクエストの full-flash
-> 系ではランが完走せず、flash-lite 系だけが、エージェントを動かせるだけの
-> 上限を備えています。
+> **モデルの最低要件**：エージェントを 1 回実行すると、内部でモデル
+> 呼び出しが 6 回以上発生します。一方で kagent の Go ADK は、
+> 429（リクエスト上限超過）応答をリトライしません。したがって毎分およそ
+> 10 リクエスト以上を許容するモデルティアが必要で、それより低いと実行の
+> たびに失敗します。たとえば Gemini 無料ティア（2026-07 時点）では、毎分
+> 5 リクエストの full-flash 系では実行が完走せず、flash-lite 系だけが
+> エージェントを動かせる上限を備えています。
 
 ## 設定リファレンス
 
@@ -342,7 +349,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 |---|---|---|---|
 | `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | アップストリームの facts API（`/v1`、公開、読み取り専用）。egress をプロキシ・ミラー経由にするとき変更 |
 | `MCP_HTTP_ADDR` | *（チャートが `service.port` から自動設定）* | *（未設定 = stdio）* | 設定時（例：`:8080`）は stdio の代わりに `/mcp` の Streamable HTTP で提供、`/healthz` 付き |
-| `MCP_HTTP_STATELESS` | `statelessHttp` | *（オフ）* | `1` でセッション状態なしの HTTP：`Mcp-Session-Id` の往復がなく、MCP 仕様 2026-07-28 リビジョンを使う最新クライアントを HTTP で受けるには必須です。レプリカ 2 個以上への水平スケールにも推奨。旧来のクライアントはどちらでも動きます |
+| `MCP_HTTP_STATELESS` | `statelessHttp` | *（オフ）* | `1` でセッション状態なしの HTTP：`Mcp-Session-Id` の往復がなく、MCP 仕様 2026-07-28 リビジョンを使う最新クライアントを HTTP で受けるには必須です。レプリカ 2 つ以上への水平スケールにも推奨。旧来のクライアントはどちらでも動きます |
 | `MCP_LOG` | `logLevel` | `info` | 許容値は `info`（デフォルト）・`debug`・`warn`・`error` — 認識できない値は警告なしに `info` として扱われます。`debug` はアップストリーム呼び出しごとの所要時間を追加し、`warn`・`error` はログを減らします。どのレベルでもリクエスト引数は記録されません — [ログと監査ストリーム](#ログと監査ストリーム)参照 |
 | `MCP_AUDIT` | `auditMode` | *（オフ）* | `metadata` または `full` — ツール呼び出しの監査ストリーム。[監査ストリームを有効にする](#監査ストリームを有効にする)参照 |
 
@@ -360,11 +367,12 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 専用）。デフォルトレベル（`info`）で残るのは、ライフサイクル行（起動時の
 `listening` 1 行、stdio セッション終了の 1 行）と、アップストリーム接続が
 不調なときの警告・エラー行だけです。正常なリクエストは 1 行も残しません。
-なお、stdio セッション終了の行には 2 つの形があります：クライアントが
-後片付けして切断すると `"msg":"stdio session ended"`（INFO）、後片付けなしに
-突然切れると `"msg":"stdio session ended with error"`（ERROR）— 後者も
+なお、stdio セッション終了の行には 2 つの形があります。クライアントが
+正常に終了処理を行って切断した場合は `"msg":"stdio session ended"`（INFO）、
+終了処理を行わずに切断された場合は
+`"msg":"stdio session ended with error"`（ERROR）です。後者も
 障害ではなく、終了のしかたの記録です。エラーが起きても元のエラーメッセージは
-コピーしません（リクエスト URL に運用中のバージョンが含まれるためです）。
+コピーしません（リクエスト URL に稼働中のバージョンが含まれるためです）。
 代わりに、エンドポイントのパターンとエラーの種類だけからログの文言を
 作り直して記録します：
 
@@ -379,7 +387,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 ### 監査ストリームを有効にする
 
 監査ストリームは「どのクライアントがどのツールを呼んだか」を残す別枠の
-記録です。**デフォルトはオフで、オフの間の監査レコードは 0 バイトです** —
+記録です。**デフォルトはオフで、オフの間は何も出力されません** —
 ストリーム自体が存在しません。
 
 有効にするには `MCP_AUDIT` を設定します：
@@ -399,19 +407,18 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 {"argument_names":["components","detail"],"client_name":"my-agent","client_version":"1.0.0","event":"audit","level":"INFO","msg":"audit","outcome":"ok","service":"mcp","time":"2026-07-31T02:54:47.029169122Z","tool":"check_stack","transport":"stdio"}
 ```
 
-0.6.1 からは、ステートフル（状態保持）HTTP モード — チャートの
-デフォルト — で提供しているときの監査レコードに、トランスポート
-セッション識別子である `session_id` フィールドが加わります（例：
-`"session_id":"T3E77BYZFDDA33SIUSORQ365ZL"`）— 同時に接続している
+0.6.1 からは、サーバーをステートフル（状態保持）HTTP モード（チャートの
+デフォルト）で動かしているとき、監査レコードにトランスポートセッション
+識別子である `session_id` フィールドが加わります（例：
+`"session_id":"T3E77BYZFDDA33SIUSORQ365ZL"`）。同時に接続している
 呼び出し元をセッション単位で区別するための値です。`statelessHttp`
-（環境変数 `MCP_HTTP_STATELESS`）を有効にすると名指しするセッションが
-ないため、`session_id` もクライアントが自己申告した `clientInfo` も
-レコードから消え、そのモードで呼び出し単位をつなぐキーは後述の
-`trace_id` だけになります — 監査ストリームで呼び出し元を区別する必要が
-あるなら、ステートフルモードで動かすか、呼び出し元に `traceparent` を
-送らせてください。上の例のような stdio のレコードにも `session_id` は
-ありません — プロセス 1 つに呼び出し元は 1 つだけで、区別するものが
-ないためです。
+（環境変数 `MCP_HTTP_STATELESS`）を有効にすると、特定できるセッションが
+存在しないため、`session_id` もクライアントが自己申告した `clientInfo` も
+レコードから消え、呼び出し単位をつなぐキーは後述の `trace_id` だけに
+なります。監査ストリームで呼び出し元を区別する必要があるなら、ステートフル
+モードで動かすか、呼び出し元に `traceparent` を送らせてください。上の例の
+ような stdio のレコードにも `session_id` はありません。プロセス 1 つに
+呼び出し元は 1 つだけで、区別するものがないためです。
 
 2 つのモードの違い：
 
@@ -428,16 +435,16 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 `event` フィールドが `audit` のレコードを別のシンクにルーティングすれば、
 運用ログとは別の保持ポリシーを与えられます。
 
-限界も知っておいてください：このサーバーには認証がないため、記録上の
-「呼び出し元」は、クライアントが自己申告した `clientInfo` とトランスポート
-層が見せる情報までです。どの人間がエージェントにその呼び出しをさせたかは、
-エージェント層の記録から探す必要があります。
+限界も知っておいてください。このサーバーには認証がないため、記録上の
+「呼び出し元」は、クライアントが自己申告した `clientInfo` と、トランス
+ポート層から得られる情報までです。どのユーザーがエージェントにその呼び出し
+を行わせたかは、エージェント層の記録から探す必要があります。
 
-ホスティングエンドポイントに監査ストリームはありません — リクエスト内容を
+ホスト版エンドポイントに監査ストリームはありません — リクエスト内容を
 保持しないという運用原則に従い、常にオフです。監査要件があるなら
 セルフホストを使ってください。
 
-### トレース相関（traceparent）
+### トレースの相関付け（traceparent）
 
 エージェントフレームワークが W3C trace context（分散トレーシング標準の
 リクエスト識別ヘッダー）に対応している場合、ツール呼び出しの `_meta` に
@@ -448,10 +455,11 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 ```
 
 すると、その呼び出しが残すログ行（エラー・`debug` レベル）と監査レコードに
-`trace_id` フィールドが刻まれ、アップストリームの `/v1` リクエストにも同じ
-`traceparent` ヘッダーが転送されて、エージェント → MCP サーバー →
-アップストリームを 1 つの `trace_id` でつなげられます。先に述べた監査記録の
-層の限界をつなぐ結合キーがこれです。形式が不正な値は破棄されて転送されず、
+`trace_id` フィールドが付与され、アップストリームの `/v1` リクエストにも
+同じ `traceparent` ヘッダーが転送されて、エージェント → MCP サーバー →
+アップストリームを 1 つの `trace_id` でつなげられます。先に述べた
+「監査記録だけでは呼び出し元をたどりきれない」という限界を、層をまたいで
+補うための結合キーがこれです。形式が不正な値は破棄されて転送されず、
 送らなければ何も記録されません。
 
 ## トラブルシューティング
@@ -463,7 +471,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 | HTTP クライアントが `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers` を受け取る | クライアントが送る `Mcp-Protocol-Version` ヘッダー | クライアントが MCP 2026-07-28 リビジョンを使っており、ステートフル HTTP モードはこれを拒否します。`--set statelessHttp=true`（環境変数：`MCP_HTTP_STATELESS=1`）を有効にしてください — エラー文の `StreamableHTTPOptions.Stateless` は同じスイッチの Go SDK 側の名前です |
 | kagent UI に `ratatosk-agent` が現れない | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | kagent CRD のないクラスタでは `kagent.enabled=true` のインストールが失敗します — 先に kagent をインストールしてください。マニフェスト経路は `namespace: kagent` がハードコードされているため、kagent を別のネームスペースに入れている場合はマニフェストの修正が必要です |
 | kagent でエージェントランタイムを Go ADK に変えると `ImagePullBackOff` | `kubectl describe pod` | このチャートとは無関係な、kagent 0.9.12 自体の既知の問題（[#2247]、0.9.12 以降で修正）：Go ADK イメージは `ghcr.io` にのみ公開されているのに、コントローラのデフォルトが廃止済みの `cr.kagent.dev` を指しています。回避策：kagent のインストールに `--set controller.agentImage.registry=ghcr.io` |
-| kagent エージェントが毎ラン失敗 | エージェントログの 429 | モデルティアのリクエスト上限不足 — [kagent と一緒に](#kagent-と一緒に)のモデル最低要件を参照 |
+| kagent エージェントが実行のたびに失敗 | エージェントログの 429 | モデルティアのリクエスト上限不足 — [kagent 統合](#kagent-統合)のモデル最低要件を参照 |
 
 [#2247]: https://github.com/kagent-dev/kagent/issues/2247
 
@@ -487,11 +495,12 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 ## アップストリーム API
 
 このサーバーは公開 REST API の薄いクライアントです。直接呼びたい場合は、
-ratatosk.io の `GET /v1` が自身を説明します。API キーなし、IP ごとに毎分
-60 回の制限。
+ratatosk.io の `GET /v1` を呼ぶと API 自身の説明が返ります。API キーは
+不要で、IP ごとに毎分 60 リクエストの制限があります。
 
 ## 次のステップ
 
-- ツール 6 個の詳しい説明：[README のツール表](../README.ja.md#ツール)
+- 6 つのツールのパラメータ・呼び出し例・実測レスポンス：[ツールリファレンス](tools.ja.md)
+- ツール一覧表（早見）：[README のツール表](../README.ja.md#ツール)
 - チャート値の全体と kagent トグル：[チャート README](../charts/ratatosk-mcp/README.ja.md)
 - kagent のマニフェストとサンプルエージェント：[kagent の例](../examples/kagent/README.ja.md)

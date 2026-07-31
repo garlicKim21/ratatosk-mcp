@@ -3,43 +3,45 @@
 [English](install.en.md) · [한국어](install.ko.md) · [日本語](install.ja.md)
 
 This page covers the four ways to use Ratatosk's release facts from an AI
-agent — from connecting to the hosted endpoint with nothing to install, to a
-stdio server on your laptop, a Helm deployment inside a Kubernetes cluster,
-and the kagent integration.
+agent: the hosted endpoint, with nothing to install; a stdio server on your
+laptop; a Helm deployment inside a Kubernetes cluster; and the kagent
+integration.
 
 **MCP (Model Context Protocol)** is the standard protocol AI agents use to
 call external tools. ratatosk-mcp is a server that speaks this protocol and
-provides six release-fact tools — `check_stack` (takes the component versions
+provides six release-fact tools: `check_stack` (takes the component versions
 you run and returns the facts on your upgrade path), `list_facts` (the
 incremental fact feed), `facts_by_entity` (reverse lookup by identifier —
 CVE ids, flags, and so on), `get_release` (one release in full),
-`list_releases` (recent releases of one project as summaries),
-`list_projects` (tracked projects and their canonical slugs) — and any
+`list_releases` (recent releases of one project as summaries), and
+`list_projects` (tracked projects and their canonical slugs). Any
 MCP-capable client can connect: Claude Code, Claude Desktop, kagent, your
 own SDK agent.
 
-## Choose how to run it
+## Choosing a deployment mode
 
 | Your situation | Use | Section |
 | --- | --- | --- |
 | Just want to try it — installing nothing | Register the hosted endpoint URL | [Hosted](#hosted-endpoint) |
 | On a laptop with Claude Code / Claude Desktop / any stdio MCP client | `docker run` (stdio) | [Local](#local-stdio) |
-| Running your own agents in Kubernetes (any framework, CI jobs, SDK clients) | Helm chart | [In-cluster, standalone](#in-cluster-standalone-helm) |
-| Using [kagent](https://kagent.dev) | `kagent.enabled=true` Helm toggle, or plain manifests | [With kagent](#with-kagent) |
+| Running your own agents in Kubernetes (any framework, CI jobs, SDK clients) | Helm chart | [In-cluster](#in-cluster-deployment-without-kagent-helm) |
+| Using [kagent](https://kagent.dev) | `kagent.enabled=true` Helm toggle, or plain manifests | [kagent integration](#kagent-integration) |
 
 All four modes serve the same public data through the same six tools, and no
-mode needs an account or an API key. Three things differ: how far the running
-versions you pass to `check_stack` travel (when self-hosted, the version
-comparison finishes inside your own process, so the versions never leave your
-infrastructure; when hosted, they pass through server memory but are written
-to no log), who you share the upstream request limit with (hosted uses a shared
-bucket; self-hosted gets its own IP's allowance), and whether you can keep an
-audit stream (self-hosted only).
+mode needs an account or an API key. Three things differ:
 
-One thing to know is common to all modes:
+- **How far the versions you pass to `check_stack` travel.** Self-hosted,
+  the comparison finishes inside your own process, so the versions never
+  leave your infrastructure. Hosted, they pass through server memory but are
+  written to no log.
+- **Whose request limit you share.** Hosted uses a shared bucket;
+  self-hosted gets its own IP's allowance.
+- **Whether you can keep an audit stream.** Self-hosted only.
+
+One thing is true in every mode:
 tools that take a specific version as an argument, like `get_release`, put
-that version in the upstream request path in every mode — it is the value
-that names what to fetch. Even that path does not land in server-side logs,
+that version in the upstream request path, because naming the release is how
+it is fetched. Even that path does not land in server-side logs,
 though: the access log strips query strings and reduces `/v1/releases/…` and
 `/v1/upgrade/…` paths to their prefix before writing. Each section below has
 the details.
@@ -52,7 +54,7 @@ the details.
 - **The `claude mcp add` commands in the examples**: the
   [Claude Code](https://claude.com/claude-code) CLI (the `claude` command)
   must be installed. Not required if you use another MCP client — follow its
-  own registration method instead.
+  registration procedure instead.
 - **In-cluster (Helm)**: a Kubernetes cluster, Helm 3, and a clone of this
   repository. The chart is not published to a chart repository or an OCI
   registry; it lives only in the repo.
@@ -61,7 +63,7 @@ the details.
   your cluster restricts egress with NetworkPolicy or an egress proxy, add
   this destination to the allowlist. If you have to go through a proxy or a
   mirror, `RATATOSK_URL` (chart value: `ratatoskUrl`) changes the upstream
-  address. Running while blocked makes tools return errors or empty results
+  address. If egress is blocked, tools return errors or empty results
   (`check_stack` reports `fetch failed: …` in each component's `note` field
   instead of erroring) — see [Troubleshooting](#troubleshooting).
 - **kagent integration**: a cluster with kagent already installed (kagent
@@ -74,7 +76,7 @@ nothing to install. It is served over streamable HTTP and is stateless: there
 are no sessions, so each request is handled independently, without an
 `Mcp-Session-Id` round trip.
 
-### Register
+### Register the endpoint with your client
 
 Claude Code:
 
@@ -98,8 +100,9 @@ curl -s -X POST https://ratatosk.io/mcp \
 ```
 
 The response comes with SSE (Server-Sent Events) framing — a `Content-Type`
-of `text/event-stream` is not a failure. If the JSON on the `data:` line
-shows `"serverInfo"` with `"name":"ratatosk"`, all is well:
+of `text/event-stream` is expected, not an error. If the JSON on the `data:`
+line shows `"serverInfo"` with `"name":"ratatosk"`, the endpoint is up and
+answering:
 
 ```
 event: message
@@ -112,22 +115,22 @@ With Claude Code, check the `claude mcp list` output:
 ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
 ```
 
-### Good to know
+### Limits and expected behavior
 
 - **GET for SSE returns 405**: stateless mode serves no server-initiated
   notification stream (the SSE opened with GET), so a 405 response is normal
   behavior. Opening the URL in a browser redirects to an explainer page
   (`/docs/mcp`).
-- **Fair use**: the hosted path shares the upstream public API's rate-limit
-  bucket (60 requests/minute per IP) with its other users (a separate bucket
-  from the per-IP allowance you get when calling `/v1` directly). If you need
-  heavy use like polling, switch to self-hosting.
+- **Fair use**: the hosted path draws on one shared bucket — the upstream
+  public API's limit of 60 requests/minute per IP, shared by all hosted
+  users together. Calling `/v1` directly gives you your own per-IP allowance
+  instead. For heavy use such as polling, self-host.
 
-### Privacy — where request content goes on the hosted endpoint
+### Privacy — what the hosted endpoint records
 
 On the hosted endpoint, your `check_stack` arguments (the list of versions
-you run) pass through server memory. In return, request content is recorded
-nowhere:
+you run) pass through server memory, but no request content is recorded
+anywhere:
 
 - The MCP server log keeps only the startup line and upstream error lines;
   normal requests are not logged. Error lines carry no request arguments
@@ -143,15 +146,15 @@ nowhere:
 - The audit stream described below is off on the hosted endpoint, and stays
   off.
 
-One boundary is out of my control: connection metadata on the CDN
-(Cloudflare) leg follows Cloudflare's policy, which ratatosk.io cannot
-control. If that boundary does not meet your requirements, self-host — the
+One boundary lies outside Ratatosk's control: on the CDN (Cloudflare) leg,
+connection metadata follows Cloudflare's policy. If that boundary does not
+meet your requirements, self-host — the
 versions you pass to `check_stack` then never leave your process.
 
 ## Local (stdio)
 
 stdio is the mode where an MCP client spawns the server as a child process
-and talks to it over standard input/output. It is the default path on a
+and talks to it over standard input/output. It is the usual choice on a
 laptop with Claude Code or Claude Desktop.
 
 ### Claude Code
@@ -183,8 +186,8 @@ Claude Desktop registers MCP servers through a config file
 ```
 
 The config file's location differs per operating system; see the Claude
-Desktop documentation. To use it with no install at all, you can also
-register the [hosted endpoint](#hosted-endpoint) above as a remote connector.
+Desktop documentation. If you would rather install nothing, register the
+[hosted endpoint](#hosted-endpoint) above as a remote connector instead.
 
 ### Build from source
 
@@ -209,11 +212,11 @@ Then ask your agent:
 > "We run envoy v1.36.8 and istio 1.30.1 — anything we should act on before
 > upgrading?"
 
-Success looks like the agent calling `check_stack` and answering with the
-security fixes, removals, and changed defaults past your versions, evidence
-quotes included.
+If it is working, the agent calls `check_stack` and answers with the
+security fixes, removals, and changed defaults released after your versions,
+each with its evidence quote.
 
-## In-cluster, standalone (Helm)
+## In-cluster deployment without kagent (Helm)
 
 Set `MCP_HTTP_ADDR` and the same binary serves MCP over streamable HTTP at
 `/mcp` (with a `/healthz` health check). The chart deploys this as a
@@ -229,12 +232,12 @@ git clone https://github.com/garlicKim21/ratatosk-mcp
 helm install ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 ```
 
-No RBAC, no secrets, and it runs without warnings under the Pod Security
-Standards (PSS) `restricted` profile. All chart options are covered in the
-[chart README](../charts/ratatosk-mcp/README.md). Turn on
-`--set statelessHttp=true` in two cases: to serve current clients that use
-the 2026-07-28 revision of the MCP spec over HTTP (clients that send
-`Mcp-Protocol-Version: 2026-07-28`), and before scaling to two or more
+It needs no RBAC and no secrets, and runs without warnings under the Pod
+Security Standards (PSS) `restricted` profile. All chart options are covered
+in the [chart README](../charts/ratatosk-mcp/README.md). Turn on
+`--set statelessHttp=true` in two cases: when clients use the 2026-07-28
+revision of the MCP spec over HTTP (clients that send
+`Mcp-Protocol-Version: 2026-07-28`), and when scaling to two or more
 replicas — see the [Configuration reference](#configuration-reference).
 
 ### Verify
@@ -263,7 +266,7 @@ curl -i http://localhost:8080/healthz
 # HTTP/1.1 200 OK
 ```
 
-When you are done, clean up the backgrounded port-forward with `kill %1`.
+When you are done, stop the background port-forward with `kill %1`.
 
 ### Connect
 
@@ -283,7 +286,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp
 If you changed values with `--set` at install time, pass the same values
 again on upgrade, or add `--reuse-values`.
 
-## With kagent
+## kagent integration
 
 Two equivalent routes — pick exactly one:
 
@@ -326,8 +329,8 @@ UI, see [Troubleshooting](#troubleshooting).
 > and the kagent Go ADK does not retry 429 (rate-limited) responses. You
 > therefore need a model tier that allows roughly 10+ requests per minute;
 > below that, every run fails. For example, on the Gemini free tier (as of
-> 2026-07) the full-flash lines at 5 requests per minute never complete a
-> run — only the flash-lite lines carry limits an agent can live with.
+> 2026-07) the full-flash models, capped at 5 requests per minute, never
+> complete a run; only the flash-lite models have limits high enough.
 
 ## Configuration reference
 
@@ -362,9 +365,9 @@ logs nothing at all. Note that the stdio session end line comes in two
 shapes: `"msg":"stdio session ended"` (INFO) when the client cleans up and
 disconnects, `"msg":"stdio session ended with error"` (ERROR) when it drops
 without cleanup — the latter records how the session ended, not a failure.
-On errors, the original error message is never copied — request URLs can
-carry the running versions — so the log text is reconstructed from just the
-endpoint pattern and the kind of error:
+On errors, the original error message is never copied, because request URLs
+can carry the running versions. The log text is instead reconstructed from
+just the endpoint pattern and the kind of error:
 
 ```json
 {"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/facts","kind":"connection_refused","tool":"check_stack"}
@@ -377,7 +380,7 @@ pattern, status code, and duration. **No level puts request arguments
 ### Enabling the audit stream
 
 The audit stream is a separate record of which client called which tool.
-**It is off by default, and while off, audit records are zero bytes** — the
+**It is off by default. While it is off, nothing is emitted at all** — the
 stream does not exist.
 
 Enable it with `MCP_AUDIT`:
@@ -397,14 +400,14 @@ stream as the operational logs (stderr):
 {"argument_names":["components","detail"],"client_name":"my-agent","client_version":"1.0.0","event":"audit","level":"INFO","msg":"audit","outcome":"ok","service":"mcp","time":"2026-07-31T02:54:47.029169122Z","tool":"check_stack","transport":"stdio"}
 ```
 
-Since 0.6.1, audit records on the HTTP transport also carry a `session_id`
-field — the transport session identifier (e.g.
+Since 0.6.1, when the server runs in stateful HTTP mode (the chart default),
+audit records on the HTTP transport also carry a `session_id` field — the
+transport session identifier (e.g.
 `"session_id":"T3E77BYZFDDA33SIUSORQ365ZL"`) — which separates concurrent
-callers by session, when the server runs in stateful HTTP mode (the chart
-default). With `statelessHttp` (env `MCP_HTTP_STATELESS`) on there is no
-session to name, so `session_id` and the client's self-reported `clientInfo`
-are absent from the record, and `trace_id` (below) is the only per-call join
-key in that mode — if the audit stream must separate callers, run stateful,
+callers by session. With `statelessHttp` (env `MCP_HTTP_STATELESS`) on,
+there is no session to name, so `session_id` and the client's self-reported
+`clientInfo` are absent from the record, and `trace_id` (below) is the only
+per-call join key. If the audit stream must separate callers, run stateful,
 or have callers send `traceparent`. stdio records like the example above have
 no `session_id` either: one process serves one caller, so there is nothing
 to separate.
@@ -416,28 +419,28 @@ The two modes differ as follows:
   stateful HTTP), and the **names** of the arguments only. Argument values
   are never recorded in this mode.
 - **`full`** — all of the above plus the full argument values (the
-  `arguments` field). The version list you pass to `check_stack` lands here
-  too, so decide whether that value may live in your log system before
-  turning it on.
+  `arguments` field). The version list you pass to `check_stack` is
+  recorded here too — decide whether it belongs in your log system before
+  enabling this mode.
 
 The stream is produced inside your infrastructure and lands in your own log
-collectors. Retention and tamper-evidence are your log platform's job;
-routing records whose `event` field is `audit` to a separate sink gives them
-a retention policy of their own.
+collectors. Retention and tamper-evidence are your log platform's job; route
+records with `event: audit` to a separate sink, and they can have their own
+retention policy.
 
-Know the limit, too: this server has no authentication, so the "caller" in a
-record goes as far as the client's self-reported `clientInfo` and whatever
-the transport shows. Which human prompted the agent to make that call is
-knowledge you have to find in the agent layer's records.
+One limit: the server has no authentication, so a record identifies the
+caller only by the client's self-reported `clientInfo` and whatever the
+transport exposes. To find out which person prompted the call, look in your
+agent platform's own records.
 
-The hosted endpoint has no audit stream — it is always off, in line with the
-operating stance of not retaining request content. If you have audit
-requirements, self-host.
+The hosted endpoint has no audit stream — it is always off, because that
+endpoint retains no request content. If you have audit requirements,
+self-host.
 
 ### Trace correlation (traceparent)
 
-If your agent framework supports W3C trace context (the request-identity
-header of the distributed-tracing standard), it can send `traceparent` in
+If your agent framework supports W3C trace context (the standard header that
+carries a request's trace identity), it can send `traceparent` in
 the `_meta` of a tool call:
 
 ```json
@@ -447,9 +450,10 @@ the `_meta` of a tool call:
 The log lines that call produces (errors, `debug` level) and its audit
 record are then stamped with a `trace_id` field, and the same `traceparent`
 header is forwarded on the upstream `/v1` request — one `trace_id` connects
-agent → MCP server → upstream. This is the join key across the layer limit
-noted above — the link an audit record alone cannot make. Malformed values
-are dropped and not forwarded; send nothing and nothing is recorded.
+agent → MCP server → upstream. This is what joins the layers the audit
+record cannot: it links a prompt in your agent platform to the tool call
+here. Malformed values are dropped and not forwarded; send nothing and
+nothing is recorded.
 
 ## Troubleshooting
 
@@ -460,7 +464,7 @@ are dropped and not forwarded; send nothing and nothing is recorded.
 | An HTTP client gets `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers` | The `Mcp-Protocol-Version` header the client sends | The client speaks the 2026-07-28 MCP revision, which stateful HTTP mode rejects. Turn on `--set statelessHttp=true` (env: `MCP_HTTP_STATELESS=1`) — the `StreamableHTTPOptions.Stateless` named in the error is the Go SDK's name for the same switch |
 | `ratatosk-agent` does not appear in the kagent UI | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | Installing with `kagent.enabled=true` fails on a cluster without the kagent CRDs — install kagent first. The manifest route hardcodes `namespace: kagent`, so if kagent lives in another namespace, edit the manifests |
 | `ImagePullBackOff` after switching the kagent agent runtime to the Go ADK | `kubectl describe pod` | A known issue in kagent 0.9.12 itself, unrelated to this chart ([#2247], fixed after 0.9.12): the Go ADK image is published only to `ghcr.io` while the controller default points at the retired `cr.kagent.dev`. Workaround: `--set controller.agentImage.registry=ghcr.io` on the kagent install |
-| The kagent agent fails every run | 429 in the agent logs | The model tier's request limit is too low — see the model minimum under [With kagent](#with-kagent) |
+| The kagent agent fails every run | 429 in the agent logs | The model tier's request limit is too low — see the model minimum under [kagent integration](#kagent-integration) |
 
 [#2247]: https://github.com/kagent-dev/kagent/issues/2247
 
@@ -489,6 +493,7 @@ limited at 60 requests per minute per IP.
 
 ## Next steps
 
-- The six tools in detail: [the tools table in the README](../README.md#tools)
+- Per-tool parameters, example calls, and measured responses: [tools reference](tools.en.md)
+- The tools table at a glance: [the tools table in the README](../README.md#tools)
 - Full chart values and the kagent toggle: [chart README](../charts/ratatosk-mcp/README.md)
 - kagent manifests and the example agent: [kagent example](../examples/kagent/README.md)
