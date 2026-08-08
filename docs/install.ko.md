@@ -135,8 +135,8 @@ ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
 - 아래에서 설명할 감사 스트림은 호스팅에서 일부러 꺼 두었고, 앞으로도
   켜지 않습니다.
 
-다만 통제 밖의 경계가 하나 있습니다: CDN(Cloudflare) 구간의 접속
-메타데이터는 Cloudflare의 정책을 따르며, 이는 ratatosk.io가 관여할 수 없는
+다만 통제 밖의 경계가 하나 있습니다: CDN 구간의 접속
+메타데이터는 CDN 사업자의 정책을 따르며, 이는 ratatosk.io가 관여할 수 없는
 구간입니다. 이 경계가 요건에 맞지 않으면 설치형을 쓰세요 — `check_stack`에
 넘긴 버전이 프로세스 밖으로 나가지 않습니다.
 

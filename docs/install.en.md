@@ -146,8 +146,8 @@ anywhere:
 - The audit stream described below is off on the hosted endpoint, and stays
   off.
 
-One boundary lies outside Ratatosk's control: on the CDN (Cloudflare) leg,
-connection metadata follows Cloudflare's policy. If that boundary does not
+One boundary lies outside Ratatosk's control: on the CDN leg,
+connection metadata follows the CDN provider's policy. If that boundary does not
 meet your requirements, self-host — the
 versions you pass to `check_stack` then never leave your process.
 

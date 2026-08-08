@@ -124,8 +124,8 @@ Here is what each layer on the way keeps:
 
 The hosted endpoint runs with its audit stream off, and I keep it off — not
 recording request content is the operating stance for that endpoint. One
-boundary I do not control: connection metadata at the CDN layer (Cloudflare)
-follows Cloudflare's own policy. If your requirements rule out that transit,
+boundary I do not control: connection metadata on the CDN leg
+follows the CDN provider's own policy. If your requirements rule out that transit,
 self-host: then only project slugs leave your infrastructure on a
 `check_stack` call.
 
