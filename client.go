@@ -32,83 +32,102 @@ func newAPIClient(baseURL string) *apiClient {
 // Fact keeps the envelope as raw-ish JSON-friendly structs; the MCP tools
 // return facts verbatim, so only the fields the tools themselves inspect
 // (identity, and what check_stack's brief mode summarizes) get dedicated types.
-type Fact struct {
-	FactID    int             `json:"fact_id"`
-	Project   string          `json:"project"`
-	Version   string          `json:"version"`
-	FactType  string          `json:"fact_type"`
-	Severity  string          `json:"severity"`
-	Mandatory bool            `json:"mandatory"`
-	IssueKey  string          `json:"issue_key"`
-	GroupKey  string          `json:"advisory_group_key"`
-	// GroupSeverity is the server's storage-layer maximum across every release
-	// sharing the group key (an advisory id, or a CVE id when no advisory is
-	// cited) — broader than any locally visible fold (it includes branches
-	// outside the current query). Empty on facts with neither id and on older
-	// servers.
-	GroupSeverity string `json:"group_severity"`
-	Quote     string          `json:"quote"`
-	RefIDs    []string        `json:"ids"`
-	Condition string          `json:"condition"` // applies_if as one phrase; "" = unconditional
-	// CondKind/CondTarget survive from a structured applies_if so an agent can
-	// look the thing up in a live config instead of parsing the phrase. Empty
-	// when the server only had a fallback sentence.
-	CondKind   string `json:"condition_kind"`
-	CondTarget string `json:"condition_target"`
-	// The version that ends the exposure. FixedIn is what turns a condition
-	// into a precondition — "before you enable X, be on at least this".
-	FixedIn      string          `json:"fixed_in"`
-	RemovedIn    string          `json:"removed_in"`
-	DeprecatedIn string          `json:"deprecated_in"`
-	Raw          json.RawMessage `json:"-"`
+// Change is one normalized change from /v1 (RFC 20). It replaces the old Fact:
+// the server now carries three axes the client used to infer — family (what
+// kind of thing), bucket (how to act NOW), and a machine-evaluable applies_if.
+//
+// check_stack got simpler because of it: "applies to everyone" used to be
+// guessed from an empty condition string; now bucket says it outright, and it
+// is the SAME rule the website and the weekly email use.
+type Change struct {
+	ChangeID  string `json:"change_id"`
+	MatterKey string `json:"matter_key"`
+	Project   string `json:"project"`
+	Version   string `json:"version"`
+	Family    string `json:"family"`
+	Bucket    string `json:"bucket"`
+	Kind      string `json:"kind"`
+	Quote     string `json:"quote"`
+	// Condition is applies_if rendered as one phrase for humans; "" when the
+	// change applies unconditionally.
+	Condition string `json:"condition"`
+	// CondTargets are the identifiers to look for in a live configuration —
+	// the structured half of applies_if. Empty when the server could not
+	// structure it (Evaluable false), in which case Condition is the sentence.
+	CondTargets []string `json:"condition_targets"`
+	Evaluable   bool     `json:"condition_evaluable"`
+	// Advisories cited by this change, with the ledger's CURRENT severity.
+	Advisories []Advisory `json:"advisories"`
+	// Window is the deprecation timing when the server knows it.
+	Window map[string]string `json:"window"`
+	Seq    int               `json:"seq"`
+	Raw    json.RawMessage   `json:"-"`
 }
 
-func (f *Fact) UnmarshalJSON(b []byte) error {
+type Advisory struct {
+	ID       string `json:"id"`
+	Severity string `json:"severity"`
+}
+
+func (c *Change) UnmarshalJSON(b []byte) error {
 	type alias struct {
-		FactID    int    `json:"fact_id"`
+		ChangeID  string `json:"change_id"`
+		MatterKey string `json:"matter_key"`
 		Project   string `json:"project"`
 		Version   string `json:"version"`
-		FactType  string `json:"fact_type"`
-		Severity  string `json:"severity"`
-		Mandatory bool   `json:"mandatory"`
-		IssueKey      string `json:"issue_key"`
-		GroupKey      string `json:"advisory_group_key"`
-		GroupSeverity string `json:"group_severity"`
+		Family    string `json:"family"`
+		Bucket    string `json:"bucket"`
+		Kind      string `json:"kind"`
+		Quote     string `json:"quote"`
+		Seq       int    `json:"seq"`
 		AppliesIf struct {
-			Status     string `json:"status"`
-			Verb       string `json:"verb"`
-			TargetKind string `json:"target_kind"`
-			TargetName string `json:"target_name"`
-			Fallback   string `json:"fallback"`
+			Evaluable bool   `json:"evaluable"`
+			Mode      string `json:"mode"`
+			Raw       string `json:"raw"`
+			Clauses   []struct {
+				Kind     string `json:"kind"`
+				Name     string `json:"name"`
+				Verb     string `json:"verb"`
+				Polarity string `json:"polarity"`
+			} `json:"clauses"`
 		} `json:"applies_if"`
-		Affected struct {
-			FixedIn      string `json:"fixed_in"`
-			RemovedIn    string `json:"removed_in"`
-			DeprecatedIn string `json:"deprecated_in"`
-		} `json:"affected"`
-		References struct {
-			IDs   []string `json:"ids"`
-			Quote string   `json:"quote"`
-		} `json:"references"`
+		Advisories []Advisory        `json:"advisories"`
+		Window     map[string]string `json:"window"`
 	}
 	var a alias
 	if err := json.Unmarshal(b, &a); err != nil {
 		return err
 	}
-	f.FactID, f.Project, f.Version = a.FactID, a.Project, a.Version
-	f.FactType, f.Severity, f.Mandatory = a.FactType, a.Severity, a.Mandatory
-	f.IssueKey, f.GroupKey, f.GroupSeverity = a.IssueKey, a.GroupKey, a.GroupSeverity
-	f.Quote, f.RefIDs = a.References.Quote, a.References.IDs
-	f.FixedIn, f.RemovedIn, f.DeprecatedIn = a.Affected.FixedIn, a.Affected.RemovedIn, a.Affected.DeprecatedIn
-	switch a.AppliesIf.Status {
-	case "structured":
-		f.Condition = conditionPhrase(a.AppliesIf.Verb, a.AppliesIf.TargetKind, a.AppliesIf.TargetName)
-		f.CondKind, f.CondTarget = a.AppliesIf.TargetKind, a.AppliesIf.TargetName
-	case "degraded":
-		f.Condition = a.AppliesIf.Fallback
+	c.ChangeID, c.MatterKey = a.ChangeID, a.MatterKey
+	c.Project, c.Version = a.Project, a.Version
+	c.Family, c.Bucket, c.Kind, c.Quote = a.Family, a.Bucket, a.Kind, a.Quote
+	c.Advisories, c.Window, c.Seq = a.Advisories, a.Window, a.Seq
+	c.Evaluable = a.AppliesIf.Evaluable
+	for _, cl := range a.AppliesIf.Clauses {
+		c.CondTargets = append(c.CondTargets, cl.Name)
+		c.Condition = joinPhrase(c.Condition, conditionPhrase(cl.Verb, cl.Kind, cl.Name), a.AppliesIf.Mode)
 	}
-	f.Raw = append(f.Raw[:0], b...)
+	if c.Condition == "" && a.AppliesIf.Mode != "universal" {
+		c.Condition = a.AppliesIf.Raw // 구조화 못 한 조건 — 문장이라도 준다
+	}
+	c.Raw = append(c.Raw[:0], b...)
 	return nil
+}
+
+// joinPhrase strings clauses together in the mode the server recorded, so an
+// agent reads "A or B" / "A and B" rather than a bare list.
+func joinPhrase(acc, next, mode string) string {
+	if next == "" {
+		return acc
+	}
+	if acc == "" {
+		return next
+	}
+	sep := " and "
+	if mode == "any_of" {
+		sep = " or "
+	}
+	return acc + sep + next
 }
 
 // conditionPhrase renders the stored (verb, kind, name) triple as English.
@@ -145,21 +164,37 @@ func conditionPhrase(verb, kind, name string) string {
 	return strings.TrimSpace(verb + " " + target)
 }
 
-// MarshalJSON re-emits the verbatim envelope the API returned.
-func (f Fact) MarshalJSON() ([]byte, error) { return f.Raw, nil }
+func (c Change) MarshalJSON() ([]byte, error) { return c.Raw, nil }
 
-// EffSeverity is the severity check_stack reasons with: the server's advisory
-// group maximum when present, else the fact's own severity.
-func (f Fact) EffSeverity() string {
-	if f.GroupSeverity != "" {
-		return f.GroupSeverity
+// EffSeverity is what check_stack ranks by: the highest advisory severity the
+// change cites. Without an advisory, security-family changes read as "high"
+// and everything else falls back to the bucket's urgency — the old per-fact
+// severity column no longer exists.
+func (c Change) EffSeverity() string {
+	best := ""
+	for _, a := range c.Advisories {
+		if severityRank[strings.ToLower(a.Severity)] > severityRank[best] {
+			best = strings.ToLower(a.Severity)
+		}
 	}
-	return f.Severity
+	if best != "" {
+		return best
+	}
+	if c.Family == "security" {
+		return "high"
+	}
+	switch c.Bucket {
+	case "action":
+		return "medium"
+	case "check":
+		return "low"
+	}
+	return "info"
 }
 
-type factsPage struct {
-	Facts     []Fact `json:"facts"`
-	NextSince *int   `json:"next_since"`
+type changesPage struct {
+	Changes   []Change `json:"changes"`
+	NextSince *int     `json:"next_since"`
 }
 
 // get fetches one /v1 resource. endpoint is the log-safe route PATTERN
@@ -219,17 +254,17 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// listFacts fetches one page of /v1/facts.
-func (c *apiClient) listFacts(ctx context.Context, project, factType, severity string, since, limit int) (*factsPage, error) {
+// listChanges fetches one page of /v1/changes.
+func (c *apiClient) listChanges(ctx context.Context, project, family, bucket string, since, limit int) (*changesPage, error) {
 	q := url.Values{}
 	if project != "" {
 		q.Set("project", project)
 	}
-	if factType != "" {
-		q.Set("type", factType)
+	if family != "" {
+		q.Set("family", family)
 	}
-	if severity != "" {
-		q.Set("severity", severity)
+	if bucket != "" {
+		q.Set("bucket", bucket)
 	}
 	if since > 0 {
 		q.Set("since", fmt.Sprint(since))
@@ -237,24 +272,24 @@ func (c *apiClient) listFacts(ctx context.Context, project, factType, severity s
 	if limit > 0 {
 		q.Set("limit", fmt.Sprint(limit))
 	}
-	var page factsPage
-	if err := c.get(ctx, "/v1/facts", "/v1/facts", q, &page); err != nil {
+	var page changesPage
+	if err := c.get(ctx, "/v1/changes", "/v1/changes", q, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
 }
 
-// allProjectFacts pages through every fact for a project. Only the project
+// allProjectChanges pages through every change for a project. Only the project
 // slug is sent to the server — never the caller's running version.
-func (c *apiClient) allProjectFacts(ctx context.Context, project string) ([]Fact, error) {
-	var all []Fact
+func (c *apiClient) allProjectChanges(ctx context.Context, project string) ([]Change, error) {
+	var all []Change
 	since := 0
 	for {
-		page, err := c.listFacts(ctx, project, "", "", since, 200)
+		page, err := c.listChanges(ctx, project, "", "", since, 200)
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, page.Facts...)
+		all = append(all, page.Changes...)
 		if page.NextSince == nil {
 			return all, nil
 		}
@@ -262,19 +297,34 @@ func (c *apiClient) allProjectFacts(ctx context.Context, project string) ([]Fact
 	}
 }
 
-func (c *apiClient) factsByEntity(ctx context.Context, name, kind string) ([]Fact, error) {
+func (c *apiClient) changesByEntity(ctx context.Context, name, kind string) ([]Change, error) {
 	q := url.Values{}
 	q.Set("name", name)
 	if kind != "" {
 		q.Set("kind", kind)
 	}
 	var out struct {
-		Facts []Fact `json:"facts"`
+		Changes []Change `json:"changes"`
 	}
-	if err := c.get(ctx, "/v1/facts/by-entity", "/v1/facts/by-entity", q, &out); err != nil {
+	if err := c.get(ctx, "/v1/changes/by-entity", "/v1/changes/by-entity", q, &out); err != nil {
 		return nil, err
 	}
-	return out.Facts, nil
+	return out.Changes, nil
+}
+
+// getMatter fetches one matter's history across releases. New in RFC 20: the
+// same fix lands on several branches carrying different advisory sets, and
+// only the full list shows that.
+func (c *apiClient) getMatter(ctx context.Context, key string, includeAll bool) (json.RawMessage, error) {
+	var raw json.RawMessage
+	q := url.Values{}
+	if includeAll {
+		q.Set("include", "all")
+	}
+	if err := c.get(ctx, "/v1/matters/{key}", "/v1/matters/"+url.PathEscape(key), q, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 // getRelease fetches one reviewed release; an empty versionTag asks the server

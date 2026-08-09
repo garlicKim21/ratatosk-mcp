@@ -15,179 +15,87 @@ import (
 
 // briefReport must sort by version, fold the same issue_key across release
 // branches into its earliest fix, and split critical/high from the rest.
-func TestBriefReport(t *testing.T) {
-	facts := []Fact{
-		// same advisory fixed on three branches — arrives out of order
-		{FactID: 285, Version: "v1.38.3", FactType: "security_fix", Severity: "critical", Mandatory: true, IssueKey: "sec-1"},
-		{FactID: 211, Version: "v1.36.9", FactType: "security_fix", Severity: "critical", Mandatory: true, IssueKey: "sec-1"},
-		{FactID: 352, Version: "v1.37.5", FactType: "security_fix", Severity: "critical", Mandatory: true, IssueKey: "sec-1"},
-		// distinct medium fact → other_facts
-		{FactID: 219, Version: "v1.36.9", FactType: "capability_removed", Severity: "medium", Mandatory: true, IssueKey: "cap-1"},
-		// no issue_key → never folded
-		{FactID: 300, Version: "v1.37.0", FactType: "default_changed", Severity: "low"},
-	}
-	keys := make([][]int, len(facts))
-	for i, f := range facts {
-		keys[i] = version.NormalizeVersion(f.Version)
-	}
+func ch(id, ver, kind, family, bucket, matter string, adv ...Advisory) Change {
+	return Change{ChangeID: id, Version: ver, Kind: kind, Family: family,
+		Bucket: bucket, MatterKey: matter, Advisories: adv}
+}
 
-	sum, action, check, other := briefReport(facts, keys)
+func keysOf(cs []Change) [][]int {
+	keys := make([][]int, len(cs))
+	for i, c := range cs {
+		keys[i] = version.NormalizeVersion(c.Version)
+	}
+	return keys
+}
 
-	if len(check) != 0 {
-		t.Errorf("no fact carries a condition, so check_config must be empty: %+v", check)
+// 같은 사안이 여러 갈래에 들어오면 **가장 이른 수정**으로 접힌다 — 운영자는
+// 한 번 올리고, 그 사안을 닫는 가장 가까운 릴리스가 실행 가능한 답이다.
+func TestBriefReportCollapsesMatterToEarliestFix(t *testing.T) {
+	crit := Advisory{ID: "CVE-1", Severity: "critical"}
+	cs := []Change{
+		ch("c285", "v1.38.3", "defect_corrected", "security", "action", "m/sec-1", crit),
+		ch("c211", "v1.36.9", "defect_corrected", "security", "action", "m/sec-1", crit),
+		ch("c352", "v1.37.5", "defect_corrected", "security", "action", "m/sec-1", crit),
+		ch("c219", "v1.36.9", "removed", "breaking", "check", "m/cap-1"),
+		ch("c300", "v1.37.0", "default_changed", "breaking", "plan", "m/def-1"),
 	}
-	if sum.NewFacts != 5 || sum.DistinctIssues != 3 {
-		t.Fatalf("summary: got new=%d distinct=%d, want 5/3", sum.NewFacts, sum.DistinctIssues)
+	sum, action, check, other := briefReport(cs, keysOf(cs))
+
+	if sum.NewChanges != 5 || sum.DistinctMatters != 3 {
+		t.Fatalf("summary: got new=%d distinct=%d, want 5/3", sum.NewChanges, sum.DistinctMatters)
 	}
-	if sum.Mandatory != 2 {
-		t.Errorf("mandatory: got %d, want 2 (folded copies counted once)", sum.Mandatory)
+	if len(action) != 1 || action[0].ChangeID != "c211" {
+		t.Fatalf("action_required: want the earliest fix (c211), got %+v", action)
 	}
-	if len(action) != 1 || action[0].FactID != 211 {
-		t.Fatalf("action_required: want exactly the earliest fix (fact 211), got %+v", action)
+	if len(action[0].AlsoIn) != 2 {
+		t.Errorf("collapsed entry must list the other branches: %+v", action[0].AlsoIn)
 	}
-	if got := action[0].AlsoIn; len(got) != 2 || got[0] != "v1.37.5" || got[1] != "v1.38.3" {
-		t.Errorf("same_issue_also_addressed_in: got %v, want [v1.37.5 v1.38.3]", got)
+	if len(check) != 1 || check[0].ChangeID != "c219" {
+		t.Errorf("check bucket routes to check_config: %+v", check)
 	}
-	if len(other) != 2 || other[0].FactID != 219 || other[1].FactID != 300 {
-		t.Errorf("other_facts: got %+v, want facts 219 then 300 in version order", other)
-	}
-	if sum.BySeverity["critical"] != 1 || sum.ByType["security_fix"] != 1 {
-		t.Errorf("counts must be over distinct issues: %v %v", sum.BySeverity, sum.ByType)
+	if len(other) != 1 || other[0].ChangeID != "c300" {
+		t.Errorf("plan bucket routes to the tail: %+v", other)
 	}
 }
 
-// The same advisory extracted from different branches' notes gets different
-// issue_keys and can get different severity judgments (each note is analyzed
-// independently). briefReport must fold on advisory_group_key and show the
-// strongest judgment in the group — observed live: envoy CVE-2026-47692,
-// high on v1.36.9 but critical on v1.37.5.
-func TestBriefReportAdvisoryGroupSeverity(t *testing.T) {
-	facts := []Fact{
-		{FactID: 210, Version: "v1.36.9", FactType: "security_fix", Severity: "high", IssueKey: "sec-a", GroupKey: "adv:g1"},
-		{FactID: 351, Version: "v1.37.5", FactType: "security_fix", Severity: "critical", Mandatory: true, IssueKey: "sec-b", GroupKey: "adv:g1"},
-		// group judged medium first, high later → must be promoted into action_required
-		{FactID: 400, Version: "v1.36.9", FactType: "security_fix", Severity: "medium", IssueKey: "sec-c", GroupKey: "adv:g2"},
-		{FactID: 401, Version: "v1.38.3", FactType: "security_fix", Severity: "high", IssueKey: "sec-d", GroupKey: "adv:g2"},
+// **버킷이 갈래를 정한다.** 예전엔 심각도만 보고 갈라서, ClusterMesh 사용자에게만
+// 해당하는 high 항목이 모두에게 "지금 올리라"로 읽혔다(2026-07-28 실측). 이제는
+// 서버가 웹·메일과 같은 규칙으로 계산한 bucket을 그대로 따른다.
+func TestBriefReportSplitsByBucketNotSeverity(t *testing.T) {
+	crit := Advisory{ID: "CVE-2", Severity: "critical"}
+	cs := []Change{
+		ch("c1", "v1.36.9", "defect_corrected", "security", "check", "m/a", crit),
+		ch("c2", "v1.37.5", "value_changed", "breaking", "action", "m/b"),
 	}
-	keys := make([][]int, len(facts))
-	for i, f := range facts {
-		keys[i] = version.NormalizeVersion(f.Version)
+	_, action, check, _ := briefReport(cs, keysOf(cs))
+	if len(check) != 1 || check[0].ChangeID != "c1" {
+		t.Fatalf("critical but conditional must stay in check_config: %+v", check)
 	}
-
-	sum, action, check, other := briefReport(facts, keys)
-
-	if sum.DistinctIssues != 2 || len(other) != 0 || len(check) != 0 {
-		t.Fatalf("want 2 distinct unconditional issues, all in action_required; got distinct=%d action=%d check=%d other=%d",
-			sum.DistinctIssues, len(action), len(check), len(other))
-	}
-	if action[0].FactID != 210 || action[0].Severity != "critical" || !action[0].Mandatory {
-		t.Errorf("group adv:g1: want earliest fix (210) shown at group-max severity critical and mandatory, got %+v", action[0])
-	}
-	if got := action[0].AlsoIn; len(got) != 1 || got[0] != "v1.37.5" {
-		t.Errorf("group adv:g1 also_in: got %v, want [v1.37.5]", got)
-	}
-	if action[1].FactID != 400 || action[1].Severity != "high" {
-		t.Errorf("group adv:g2: want fact 400 promoted to high, got %+v", action[1])
-	}
-	if sum.BySeverity["critical"] != 1 || sum.BySeverity["high"] != 1 || sum.BySeverity["medium"] != 0 {
-		t.Errorf("by_severity must count collapsed entries at group-max severity: %v", sum.BySeverity)
-	}
-	if sum.Mandatory != 1 {
-		t.Errorf("mandatory: got %d, want 1 (any branch mandatory marks the issue)", sum.Mandatory)
+	if len(action) != 1 || action[0].ChangeID != "c2" {
+		t.Fatalf("unconditional must be action_required regardless of severity: %+v", action)
 	}
 }
 
-// One extraction sentence covering several CVEs arrives as one fact per id
-// with an identical quote (observed live: envoy v1.39.0, same quote seven
-// times in a brief report). Brief mode merges them: ids together, strongest
-// severity, diverging applies_if collected into applies_if_any. Same quote on
-// a different version stays separate.
-func TestBriefReportMergesSharedQuotes(t *testing.T) {
-	q := "Security fixes were added for ext_authz (CVE-1), ext_proc (CVE-2)."
-	facts := []Fact{
-		{FactID: 466, Version: "v1.39.0", FactType: "security_fix", Severity: "medium", Mandatory: true,
-			IssueKey: "s1", Quote: q, Condition: "uses extension ext_authz", RefIDs: []string{"CVE-1"}},
-		{FactID: 467, Version: "v1.39.0", FactType: "security_fix", Severity: "high",
-			IssueKey: "s2", Quote: q, Condition: "uses extension ext_proc", RefIDs: []string{"CVE-2"}},
-		{FactID: 500, Version: "v1.38.9", FactType: "security_fix", Severity: "medium",
-			IssueKey: "s3", Quote: q, RefIDs: []string{"CVE-1"}},
+// 등급은 인용된 권고의 현재값에서 온다. 갈래마다 권고 구성이 다르면 가장 높은 쪽.
+func TestBriefReportTakesHighestAdvisorySeverity(t *testing.T) {
+	cs := []Change{
+		ch("c10", "v1.36.9", "defect_corrected", "security", "action", "m/g1",
+			Advisory{ID: "CVE-a", Severity: "high"}),
+		ch("c11", "v1.37.5", "defect_corrected", "security", "action", "m/g1",
+			Advisory{ID: "CVE-a", Severity: "high"}, Advisory{ID: "CVE-b", Severity: "critical"}),
 	}
-	keys := make([][]int, len(facts))
-	for i, f := range facts {
-		keys[i] = version.NormalizeVersion(f.Version)
+	_, action, _, _ := briefReport(cs, keysOf(cs))
+	if len(action) != 1 {
+		t.Fatalf("one matter → one entry, got %d", len(action))
 	}
-
-	sum, action, check, other := briefReport(facts, keys)
-
-	if sum.DistinctIssues != 3 {
-		t.Fatalf("summary stays per issue: got distinct=%d, want 3", sum.DistinctIssues)
+	if action[0].Severity != "critical" {
+		t.Errorf("collapsed entry must show the strongest advisory: got %q", action[0].Severity)
 	}
-	if len(action)+len(check)+len(other) != 2 {
-		t.Fatalf("want 2 rendered entries (v1.39.0 merged, v1.38.9 separate), got action=%d check=%d other=%d",
-			len(action), len(check), len(other))
-	}
-	// The merged entry is high but only bites installs using ext_authz or
-	// ext_proc, so it belongs in check_config — not in the list a reader takes
-	// as "upgrade now".
-	if len(action) != 0 {
-		t.Errorf("a conditional entry must not reach action_required: %+v", action)
-	}
-	var merged *briefFact
-	for i := range check {
-		if check[i].Version == "v1.39.0" {
-			merged = &check[i]
-		}
-	}
-	if merged == nil {
-		t.Fatalf("merged v1.39.0 entry must sit in check_config at max severity high; check=%+v other=%+v", check, other)
-	}
-	if len(merged.IDs) != 2 || merged.IDs[0] != "CVE-1" || merged.IDs[1] != "CVE-2" {
-		t.Errorf("ids concatenated: got %v", merged.IDs)
-	}
-	if merged.Severity != "high" || !merged.Mandatory {
-		t.Errorf("merged entry: want strongest severity high + mandatory, got %s/%v", merged.Severity, merged.Mandatory)
-	}
-	if merged.Condition != "" || len(merged.ConditionsAny) != 2 {
-		t.Errorf("diverging conditions must move to applies_if_any: cond=%q any=%v", merged.Condition, merged.ConditionsAny)
+	if action[0].ChangeID != "c10" {
+		t.Errorf("but it stays anchored to the earliest fix: got %q", action[0].ChangeID)
 	}
 }
 
-// A high fact whose condition the caller has not resolved is not an action.
-// Live case (2026-07-28): cilium v1.19.6 fixes a ClusterMesh blackhole, and an
-// agent read severity alone and told a cluster with no ClusterMesh to upgrade
-// first thing. fixed_in has to ride along — it is the answer to "before I turn
-// ClusterMesh on, what do I need?".
-func TestBriefReportKeepsConditionalOutOfActionRequired(t *testing.T) {
-	facts := []Fact{
-		{FactID: 492, Version: "v1.19.6", FactType: "behavior_changed", Severity: "high", Mandatory: true,
-			IssueKey: "cm-1", FixedIn: "v1.19.6", Quote: "Fix ClusterMesh service affinity annotation ...",
-			Condition: `uses service.cilium.io/affinity: "none" in ClusterMesh with no local endpoints`},
-		{FactID: 600, Version: "v1.19.6", FactType: "security_fix", Severity: "high", Mandatory: true,
-			IssueKey: "sec-1", FixedIn: "v1.19.6", Quote: "Fix an unauthenticated crash in the agent."},
-	}
-	keys := make([][]int, len(facts))
-	for i, f := range facts {
-		keys[i] = version.NormalizeVersion(f.Version)
-	}
-
-	_, action, check, _ := briefReport(facts, keys)
-
-	if len(action) != 1 || action[0].FactID != 600 {
-		t.Fatalf("action_required must hold only the unconditional fact 600, got %+v", action)
-	}
-	if len(check) != 1 || check[0].FactID != 492 {
-		t.Fatalf("check_config must hold the conditional fact 492, got %+v", check)
-	}
-	if check[0].FixedIn != "v1.19.6" || action[0].FixedIn != "v1.19.6" {
-		t.Errorf("fixed_in must survive into the brief: check=%q action=%q", check[0].FixedIn, action[0].FixedIn)
-	}
-}
-
-// The server never sees the caller's cluster, so it cannot verify a running
-// version — with one exception: a version below everything on record. That is
-// the shape a fabricated version took live (cilium 1.16.0 reported for a 1.19.5
-// install), and the shape a genuinely ancient install takes too. Both deserve
-// the same warning, and neither may pass silently.
 func TestCoverageNote(t *testing.T) {
 	oldest, oldestTag := version.NormalizeVersion("v1.17.18"), "v1.17.18"
 
@@ -310,12 +218,12 @@ func TestResolveTarget(t *testing.T) {
 func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
 	// Wire-shape fixture (references/affected envelopes), because Fact
 	// round-trips through custom (Un)MarshalJSON that preserves the raw form.
-	page := `{"facts":[
-		{"fact_id":1,"project":"envoy","version":"v1.36.9","fact_type":"security_fix","severity":"high","mandatory":true,"issue_key":"sec-1","references":{"quote":"crash"}},
-		{"fact_id":2,"project":"envoy","version":"v1.36.9","fact_type":"default_changed","severity":"medium","mandatory":true,"issue_key":"def-1"},
-		{"fact_id":3,"project":"envoy","version":"v1.36.7","fact_type":"security_fix","severity":"high","mandatory":true,"issue_key":"old-1"}]}`
+	page := `{"changes":[
+		{"change_id":"c1","matter_key":"m/sec-1","project":"envoy","version":"v1.36.9","kind":"defect_corrected","family":"security","bucket":"action","quote":"crash","advisories":[{"id":"CVE-x","severity":"high"}]},
+		{"change_id":"c2","matter_key":"m/def-1","project":"envoy","version":"v1.36.9","kind":"default_changed","family":"breaking","bucket":"plan"},
+		{"change_id":"c3","matter_key":"m/old-1","project":"envoy","version":"v1.36.7","kind":"defect_corrected","family":"security","bucket":"action","advisories":[{"id":"CVE-y","severity":"high"}]}]}`
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/facts" {
+		if r.URL.Path != "/v1/changes" {
 			t.Errorf("unexpected upstream path %s", r.URL.Path)
 		}
 		w.Write([]byte(page))
@@ -334,10 +242,10 @@ func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
 	var out struct {
 		Components []struct {
 			Summary struct {
-				NewFacts int `json:"new_facts"`
+				NewChanges int `json:"new_changes"`
 			} `json:"summary"`
 			ActionRequired []struct {
-				FactID int `json:"fact_id"`
+				ChangeID string `json:"change_id"`
 			} `json:"action_required"`
 			Note string `json:"note"`
 		} `json:"components"`
@@ -347,11 +255,11 @@ func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
 		t.Fatalf("unmarshal tool output: %v", err)
 	}
 	c := out.Components[0]
-	if c.Summary.NewFacts != 2 {
-		t.Errorf("new_facts = %d, want 2 (facts above running, target ignored)", c.Summary.NewFacts)
+	if c.Summary.NewChanges != 2 {
+		t.Errorf("new_changes = %d, want 2 (changes above running, target ignored)", c.Summary.NewChanges)
 	}
-	if len(c.ActionRequired) != 1 || c.ActionRequired[0].FactID != 1 {
-		t.Errorf("action_required = %+v, want exactly fact 1 back", c.ActionRequired)
+	if len(c.ActionRequired) != 1 || c.ActionRequired[0].ChangeID != "c1" {
+		t.Errorf("action_required = %+v, want exactly change c1 back", c.ActionRequired)
 	}
 	if !strings.Contains(c.Note, "empty by construction") {
 		t.Errorf("note %q must explain the ignored target", c.Note)

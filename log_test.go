@@ -78,7 +78,7 @@ func TestLogInvariantMarkerProbe(t *testing.T) {
 		}
 		if m["level"] == "ERROR" {
 			errorLines++
-			if m["upstream"] != "/v1/facts" || m["status"] != float64(http.StatusBadGateway) {
+			if m["upstream"] != "/v1/changes" || m["status"] != float64(http.StatusBadGateway) {
 				t.Errorf("ERROR line fields wrong: %v", m)
 			}
 			if m["tool"] != "check_stack" {

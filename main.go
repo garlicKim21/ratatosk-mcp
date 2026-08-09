@@ -41,11 +41,14 @@ func main() {
 	api = newAPIClient(base)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "ratatosk", Version: buildVersion}, &mcp.ServerOptions{
-		Instructions: "Data source: the public ratatosk.io agent API — release facts extracted by AI from official " +
+		Instructions: "Data source: the public ratatosk.io agent API — release changes extracted by AI from official " +
 			"release notes; verify critical decisions against the source URL in get_release (terms: https://ratatosk.io/terms). " +
+			"Every change carries three axes: family (security|breaking|deprecated — what kind of thing it is), " +
+			"bucket (action|check|plan — how to act NOW), and applies_if (a condition you evaluate against the running " +
+			"setup, structured into targets when the server could). Read bucket before severity: an 'action' entry " +
+			"applies to every install, a 'check' entry only to setups its applies_if matches. " +
 			"Upstream is rate-limited to 60 requests/minute per caller (a hosted endpoint shares one caller budget); " +
-			"prefer check_stack for stack-wide questions " +
-			"over polling list_facts per project.",
+			"prefer check_stack for stack-wide questions over polling list_changes per project.",
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -64,28 +67,38 @@ func main() {
 	}, listProjectsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "list_facts",
-		Annotations: &mcp.ToolAnnotations{Title: "Sync release facts", ReadOnlyHint: true},
-		Description: "Incremental SYNC feed of release facts (typed, entity-level changes: security fixes, " +
-			"removals, deprecations, renames, defaults) for CNCF/cloud-native projects. " +
-			"Ordered by fact_id ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
+		Name: "list_changes",
+		Annotations: &mcp.ToolAnnotations{Title: "Sync release changes", ReadOnlyHint: true},
+		Description: "Incremental SYNC feed of release changes for CNCF/cloud-native projects. " +
+			"Ordered by seq ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
 			"page through with since=<returned next_since> until next_since comes back null. " +
 			"Built for keeping a local copy up to date. For 'what is the latest release of X' or " +
-			"'recent releases of X', use get_release (omit version for the newest) instead. " +
-			"Optionally filter by project/type/severity. " +
-			"Facts citing an upstream security advisory carry advisory_group_key (the official notice id, " +
-			"e.g. GHSA-… on GitHub; facts citing only CVE ids get a cve:… key) and group_severity — the " +
-			"maximum severity across all releases sharing that key — the group-maximum reading, " +
-			"with per-release severity as the per-release evidence.",
-	}, listFactsTool)
+			"'recent releases of X', use list_releases or get_release (omit version for the newest) instead. " +
+			"Filter by project, by family (security|breaking|deprecated — what kind of thing it is) and by " +
+			"bucket (action|check|plan — how to act now). The routine record (bot dependency bumps and the like) " +
+			"is excluded by default. Two fields matter most: applies_if tells you whether an entry is yours to act " +
+			"on — when its targets are present, look them up in the running configuration instead of parsing the " +
+			"sentence; matter_key is the identity of the underlying matter across releases, which get_matter expands.",
+	}, listChangesTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "facts_by_entity",
-		Annotations: &mcp.ToolAnnotations{Title: "Facts touching one identifier", ReadOnlyHint: true},
-		Description: "Reverse index: every fact touching one exact identifier — a CVE id, CRD, feature gate, " +
+		Name: "get_matter",
+		Annotations: &mcp.ToolAnnotations{Title: "One matter across releases", ReadOnlyHint: true},
+		Description: "Every release in which one matter appeared, oldest first. Take matter_key verbatim from a " +
+			"change (case-sensitive, contains '/' and ':'). Use it to answer 'which version fixes this for MY " +
+			"branch' and 'have I already handled this'. Why every occurrence and not just the newest: the same " +
+			"containerd security roll-up landed on five branches carrying 2, 4 and 10 advisories respectively — " +
+			"told only the newest, someone on the 2-advisory branch would assume they were fully covered. " +
+			"Set include_all for the routine record too (mostly bot dependency bumps).",
+	}, getMatterTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "changes_by_entity",
+		Annotations: &mcp.ToolAnnotations{Title: "Changes touching one identifier", ReadOnlyHint: true},
+		Description: "Reverse index: every change touching one exact identifier — a CVE id, CRD, feature gate, " +
 			"flag, metric, config field, or dependency. Case-insensitive. " +
 			"Call this when you have a specific identifier (e.g. from a manifest or advisory) and want to know what changed around it.",
-	}, factsByEntityTool)
+	}, changesByEntityTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_release",
@@ -212,20 +225,20 @@ func listProjectsTool(ctx context.Context, req *mcp.CallToolRequest, args listPr
 }
 
 // ---------------------------------------------------------------------------
-// list_facts
+// list_changes
 // ---------------------------------------------------------------------------
 
-type listFactsArgs struct {
-	Project  string `json:"project,omitempty" jsonschema:"project slug filter, e.g. envoy, istio, cilium"`
-	Type     string `json:"type,omitempty" jsonschema:"fact_type filter: security_fix|dependency_bump|capability_removed|capability_deprecated|api_version_changed|identifier_renamed|validation_tightened|default_changed|behavior_changed"`
-	Severity string `json:"severity,omitempty" jsonschema:"info|low|medium|high|critical"`
-	Since    int    `json:"since,omitempty" jsonschema:"cursor: return facts with fact_id greater than this"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"page size, default 50, max 200"`
+type listChangesArgs struct {
+	Project string `json:"project,omitempty" jsonschema:"project slug filter, e.g. envoy, istio, cilium"`
+	Family  string `json:"family,omitempty" jsonschema:"security|breaking|deprecated — what kind of thing it is"`
+	Bucket  string `json:"bucket,omitempty" jsonschema:"action|check|plan — how to act now. action applies to everyone; check only if applies_if matches your setup; plan is announced for later"`
+	Since   int    `json:"since,omitempty" jsonschema:"cursor: return changes with seq greater than this"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"page size, default 50, max 200"`
 }
 
-func listFactsTool(ctx context.Context, req *mcp.CallToolRequest, args listFactsArgs) (*mcp.CallToolResult, any, error) {
-	ctx = requestContext(ctx, "list_facts", req)
-	page, err := api.listFacts(ctx, args.Project, args.Type, args.Severity, args.Since, args.Limit)
+func listChangesTool(ctx context.Context, req *mcp.CallToolRequest, args listChangesArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "list_changes", req)
+	page, err := api.listChanges(ctx, args.Project, args.Family, args.Bucket, args.Since, args.Limit)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
@@ -234,24 +247,24 @@ func listFactsTool(ctx context.Context, req *mcp.CallToolRequest, args listFacts
 }
 
 // ---------------------------------------------------------------------------
-// facts_by_entity
+// changes_by_entity
 // ---------------------------------------------------------------------------
 
-type factsByEntityArgs struct {
+type changesByEntityArgs struct {
 	Name string `json:"name" jsonschema:"exact identifier to look up: CVE id, CRD, feature gate, flag, metric, config field, dependency"`
 	Kind string `json:"kind,omitempty" jsonschema:"optional: api|crd|feature_gate|flag|metric|config_field|extension|dependency|cve|advisory|subsystem"`
 }
 
-func factsByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args factsByEntityArgs) (*mcp.CallToolResult, any, error) {
-	ctx = requestContext(ctx, "facts_by_entity", req)
+func changesByEntityTool(ctx context.Context, req *mcp.CallToolRequest, args changesByEntityArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "changes_by_entity", req)
 	if args.Name == "" {
 		return errResult(fmt.Errorf("name is required")), nil, nil
 	}
-	facts, err := api.factsByEntity(ctx, args.Name, args.Kind)
+	changes, err := api.changesByEntity(ctx, args.Name, args.Kind)
 	if err != nil {
 		return errResult(err), nil, nil
 	}
-	res, err := jsonResult(map[string]any{"facts": facts})
+	res, err := jsonResult(map[string]any{"changes": changes})
 	return res, nil, err
 }
 
@@ -324,46 +337,41 @@ type checkStackArgs struct {
 
 var severityRank = map[string]int{"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
-// briefFact is one upgrade-path fact compressed to what an agent decides on.
+// briefChange is one upgrade-path fact compressed to what an agent decides on.
 // Evidence entities and URLs live one get_release call away.
-type briefFact struct {
-	FactID    int      `json:"fact_id"`
-	Version   string   `json:"version"`
-	FactType  string   `json:"fact_type"`
-	Severity  string   `json:"severity"`
-	Mandatory bool     `json:"mandatory,omitempty"`
-	Condition string   `json:"applies_if,omitempty"` // empty = applies unconditionally
+type briefChange struct {
+	ChangeID  string `json:"change_id"`
+	MatterKey string `json:"matter_key,omitempty"`
+	Version   string `json:"version"`
+	Kind      string `json:"kind"`
+	Family    string `json:"family,omitempty"`
+	// Bucket is why this entry is in the list it is in — the server's own
+	// rule, the same one the website and the weekly email use.
+	Bucket        string   `json:"bucket"`
+	Severity      string   `json:"severity"`
+	Condition     string   `json:"applies_if,omitempty"`     // empty = applies unconditionally
 	ConditionsAny []string `json:"applies_if_any,omitempty"` // merged entry with diverging conditions
-	// Target names the thing the condition is about, when the server stored it
-	// structurally — an agent greps a live config for this instead of reading
-	// the phrase. Absent when applies_if is only a sentence.
-	Target *conditionTarget `json:"applies_if_target,omitempty"`
-	// FixedIn is the minimum version that closes this issue: the answer to
-	// "before I turn that feature on, what do I need?" — which is the useful
-	// form of a fact whose condition the stack does not meet today.
-	FixedIn      string   `json:"fixed_in,omitempty"`
-	RemovedIn    string   `json:"removed_in,omitempty"`
-	DeprecatedIn string   `json:"deprecated_in,omitempty"`
-	Quote     string   `json:"quote,omitempty"`
-	IDs       []string `json:"ids,omitempty"`
-	AlsoIn    []string `json:"same_issue_also_addressed_in,omitempty"`
-}
-
-type conditionTarget struct {
-	Kind string `json:"kind"`
-	Name string `json:"name"`
+	// Targets name the things the condition is about, when the server could
+	// structure it — grep a live config for these instead of reading the
+	// phrase. Absent when applies_if is only a sentence (evaluable false).
+	Targets []string `json:"applies_if_targets,omitempty"`
+	// Window carries deprecation timing when the server knows it.
+	Window map[string]string `json:"window,omitempty"`
+	Quote  string            `json:"quote,omitempty"`
+	IDs    []string          `json:"advisories,omitempty"`
+	AlsoIn []string          `json:"same_matter_also_addressed_in,omitempty"`
 }
 
 // conditional reports whether this entry carries a condition an agent still
 // has to resolve against the running configuration.
-func (b briefFact) conditional() bool { return b.Condition != "" || len(b.ConditionsAny) > 0 }
+func (b briefChange) conditional() bool { return b.Condition != "" || len(b.ConditionsAny) > 0 }
 
 type briefSummary struct {
-	NewFacts       int            `json:"new_facts"`
-	DistinctIssues int            `json:"distinct_issues"`
-	Mandatory      int            `json:"mandatory"`
+	NewChanges     int            `json:"new_changes"`
+	DistinctMatters int           `json:"distinct_matters"`
 	BySeverity     map[string]int `json:"by_severity"`
-	ByType         map[string]int `json:"by_type"`
+	ByFamily       map[string]int `json:"by_family"`
+	ByBucket       map[string]int `json:"by_bucket"`
 }
 
 type componentReport struct {
@@ -373,25 +381,25 @@ type componentReport struct {
 	TargetVersion  string        `json:"target_version,omitempty"`
 	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-fact components
 	Note           string        `json:"note,omitempty"`
-	FactsScanned   int           `json:"facts_scanned"`
+	ChangesScanned int           `json:"changes_scanned"`
 	Summary        *briefSummary `json:"summary,omitempty"`
-	ActionRequired []briefFact   `json:"action_required,omitempty"`
-	CheckConfig    []briefFact   `json:"check_config,omitempty"`
-	OtherFacts     []briefFact   `json:"other_facts,omitempty"`
-	OtherOmitted   int           `json:"other_facts_omitted,omitempty"`
-	RelevantFacts  []Fact        `json:"relevant_facts,omitempty"` // detail:"full" only
-	RelevantOmitted int          `json:"relevant_facts_omitted,omitempty"`
+	ActionRequired []briefChange `json:"action_required,omitempty"`
+	CheckConfig    []briefChange `json:"check_config,omitempty"`
+	OtherChanges   []briefChange `json:"other_changes,omitempty"`
+	OtherOmitted   int           `json:"other_changes_omitted,omitempty"`
+	RelevantChanges []Change     `json:"relevant_changes,omitempty"` // detail:"full" only
+	RelevantOmitted int          `json:"relevant_changes_omitted,omitempty"`
 }
 
-// otherFactsCap bounds the one-liner tail of a brief report; whatever is cut
+// otherChangesCap bounds the one-liner tail of a brief report; whatever is cut
 // is counted in other_facts_omitted — never dropped silently.
-const otherFactsCap = 100
+const otherChangesCap = 100
 
-// relevantFactsCap bounds a detail:"full" component — a long upgrade path can
+// relevantChangesCap bounds a detail:"full" component — a long upgrade path can
 // otherwise be tens of thousands of tokens (observed: envoy v1.36.0→latest,
 // 75 facts ≈ 73 KB). The cut is counted in relevant_facts_omitted — never
 // silent; agents narrow with severity_min/target_version or drill down.
-const relevantFactsCap = 50
+const relevantChangesCap = 50
 
 // coverageNote flags a running version that sits below every release we hold a
 // fact for. It is the one cross-check this server can make on a claim about an
@@ -502,13 +510,13 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		if targetNote != "" {
 			notes = append(notes, targetNote)
 		}
-		facts, err := api.allProjectFacts(ctx, comp.Project)
+		facts, err := api.allProjectChanges(ctx, comp.Project)
 		if err != nil {
 			rep.Note = "fetch failed: " + err.Error()
 			reports = append(reports, rep)
 			continue
 		}
-		rep.FactsScanned = len(facts)
+		rep.ChangesScanned = len(facts)
 		// Zero facts is ambiguous: audited silence (tracked, routine releases)
 		// or no coverage at all (unknown slug). Probe and say which — an agent
 		// must never read "not tracked" as "safe" (2026-07-23 kagent finding).
@@ -528,7 +536,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		// Facts from releases strictly newer than the running version =
 		// the upgrade path the operator has not yet absorbed.
 		unparseable := 0
-		var relevant []Fact
+		var relevant []Change
 		var keys [][]int
 		var oldest []int
 		var oldestTag string
@@ -565,20 +573,20 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		rep.Note = strings.Join(notes, "; ")
 
 		if full {
-			rep.RelevantFacts = relevant
-			if extra := len(rep.RelevantFacts) - relevantFactsCap; extra > 0 {
-				rep.RelevantFacts = rep.RelevantFacts[:relevantFactsCap]
+			rep.RelevantChanges = relevant
+			if extra := len(rep.RelevantChanges) - relevantChangesCap; extra > 0 {
+				rep.RelevantChanges = rep.RelevantChanges[:relevantChangesCap]
 				rep.RelevantOmitted = extra
 			}
-			if rep.RelevantFacts == nil {
-				rep.RelevantFacts = []Fact{}
+			if rep.RelevantChanges == nil {
+				rep.RelevantChanges = []Change{}
 			}
 			reports = append(reports, rep)
 			continue
 		}
-		rep.Summary, rep.ActionRequired, rep.CheckConfig, rep.OtherFacts = briefReport(relevant, keys)
-		if extra := len(rep.OtherFacts) - otherFactsCap; extra > 0 {
-			rep.OtherFacts = rep.OtherFacts[:otherFactsCap]
+		rep.Summary, rep.ActionRequired, rep.CheckConfig, rep.OtherChanges = briefReport(relevant, keys)
+		if extra := len(rep.OtherChanges) - otherChangesCap; extra > 0 {
+			rep.OtherChanges = rep.OtherChanges[:otherChangesCap]
 			rep.OtherOmitted = extra
 		}
 		reports = append(reports, rep)
@@ -605,19 +613,19 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 	return res, nil, err
 }
 
-// briefReport compresses the upgrade path: sorted by version, the same
-// advisory (falling back to issue_key when no advisory is attached) on
-// several branches collapsed into its earliest fix (an operator upgrades
-// once — the nearest release that fixes the issue is the actionable one),
-// then split three ways. Severity alone used to decide what surfaced as
-// action_required, so a high fact that only bites ClusterMesh users read as
-// "upgrade now" to every reader (observed live, 2026-07-28). A condition the
-// caller has not resolved is not an action yet: those go to check_config, and
-// action_required keeps only what applies to everyone.
-// Extraction judges each release note independently, so the same advisory
-// can carry different severities across branches — a collapsed entry shows
-// the strongest judgment in its group.
-func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []briefFact, []briefFact) {
+// briefReport compresses the upgrade path: sorted by version, the same matter
+// on several branches collapsed into its earliest fix (an operator upgrades
+// once — the nearest release that closes it is the actionable one), then split
+// three ways.
+//
+// The split now comes from the server's `bucket`, not from a local guess.
+// Severity alone used to decide what surfaced as action_required, so a high
+// finding that only bites ClusterMesh users read as "upgrade now" to every
+// reader (observed live, 2026-07-28); the client then patched that with a
+// "has a condition?" heuristic. The server computes the same distinction for
+// the website and the weekly email, so all three surfaces now agree by
+// construction rather than by coincidence.
+func briefReport(relevant []Change, keys [][]int) (*briefSummary, []briefChange, []briefChange, []briefChange) {
 	idx := make([]int, len(relevant))
 	for i := range idx {
 		idx[i] = i
@@ -626,94 +634,94 @@ func briefReport(relevant []Fact, keys [][]int) (*briefSummary, []briefFact, []b
 		if c := version.Compare(keys[idx[a]], keys[idx[b]]); c != 0 {
 			return c < 0
 		}
-		return relevant[idx[a]].FactID < relevant[idx[b]].FactID
+		return relevant[idx[a]].ChangeID < relevant[idx[b]].ChangeID
 	})
 
 	sum := &briefSummary{
-		NewFacts:   len(relevant),
+		NewChanges: len(relevant),
 		BySeverity: map[string]int{},
-		ByType:     map[string]int{},
+		ByFamily:   map[string]int{},
+		ByBucket:   map[string]int{},
 	}
-	byIssue := map[string]*briefFact{}
-	var ordered []*briefFact
+	byMatter := map[string]*briefChange{}
+	var ordered []*briefChange
 	for _, i := range idx {
 		f := relevant[i]
-		key := f.GroupKey
-		if key == "" {
-			key = f.IssueKey
-		}
-		if key != "" {
-			if kept, ok := byIssue[key]; ok {
-				if f.Version != kept.Version && !slices.Contains(kept.AlsoIn, f.Version) {
-					kept.AlsoIn = append(kept.AlsoIn, f.Version)
-				}
-				if severityRank[strings.ToLower(f.EffSeverity())] > severityRank[strings.ToLower(kept.Severity)] {
-					kept.Severity = f.Severity
-				}
-				if f.Mandatory {
-					kept.Mandatory = true
-				}
-				continue
+		if kept, ok := byMatter[f.MatterKey]; ok && f.MatterKey != "" {
+			if f.Version != kept.Version && !slices.Contains(kept.AlsoIn, f.Version) {
+				kept.AlsoIn = append(kept.AlsoIn, f.Version)
 			}
+			if severityRank[strings.ToLower(f.EffSeverity())] > severityRank[strings.ToLower(kept.Severity)] {
+				kept.Severity = f.EffSeverity()
+			}
+			// 같은 사안이라도 갈래마다 급이 다를 수 있다 — 더 급한 쪽으로 올린다.
+			if bucketRank(f.Bucket) < bucketRank(kept.Bucket) {
+				kept.Bucket = f.Bucket
+			}
+			continue
 		}
-		bf := &briefFact{
-			FactID:       f.FactID,
-			Version:      f.Version,
-			FactType:     f.FactType,
-			Severity:     f.EffSeverity(),
-			Mandatory:    f.Mandatory,
-			Condition:    f.Condition,
-			FixedIn:      f.FixedIn,
-			RemovedIn:    f.RemovedIn,
-			DeprecatedIn: f.DeprecatedIn,
-			Quote:        f.Quote,
-			IDs:          f.RefIDs,
+		ids := make([]string, 0, len(f.Advisories))
+		for _, a := range f.Advisories {
+			ids = append(ids, a.ID)
 		}
-		if f.CondTarget != "" {
-			bf.Target = &conditionTarget{Kind: f.CondKind, Name: f.CondTarget}
+		bc := &briefChange{
+			ChangeID:  f.ChangeID,
+			MatterKey: f.MatterKey,
+			Version:   f.Version,
+			Kind:      f.Kind,
+			Family:    f.Family,
+			Bucket:    f.Bucket,
+			Severity:  f.EffSeverity(),
+			Condition: f.Condition,
+			Targets:   f.CondTargets,
+			Window:    f.Window,
+			Quote:     f.Quote,
+			IDs:       ids,
 		}
-		if key != "" {
-			byIssue[key] = bf
+		if f.MatterKey != "" {
+			byMatter[f.MatterKey] = bc
 		}
-		ordered = append(ordered, bf)
-		sum.ByType[f.FactType]++
+		ordered = append(ordered, bc)
+		sum.ByFamily[f.Family]++
 	}
-	sum.DistinctIssues = len(ordered)
-	// severity/mandatory counts reflect the collapsed entries, whose severity
-	// may have been raised by a later branch's judgment
-	for _, bf := range ordered {
-		sum.BySeverity[bf.Severity]++
-		if bf.Mandatory {
-			sum.Mandatory++
-		}
+	sum.DistinctMatters = len(ordered)
+	for _, bc := range ordered {
+		sum.BySeverity[bc.Severity]++
+		sum.ByBucket[bc.Bucket]++
 	}
 
-	action := []briefFact{}
-	check := []briefFact{}
-	other := []briefFact{}
-	for _, bf := range mergeSharedQuotes(ordered) {
-		switch {
-		case severityRank[strings.ToLower(bf.Severity)] < severityRank["high"]:
-			other = append(other, *bf)
-		case bf.conditional():
-			check = append(check, *bf)
+	action := []briefChange{}
+	check := []briefChange{}
+	other := []briefChange{}
+	for _, bc := range mergeSharedQuotes(ordered) {
+		switch bc.Bucket {
+		case "action":
+			action = append(action, *bc)
+		case "check":
+			check = append(check, *bc)
 		default:
-			action = append(action, *bf)
+			other = append(other, *bc)
 		}
 	}
 	return sum, action, check, other
 }
 
-// mergeSharedQuotes folds brief entries that carry the same (version, quote):
-// one extraction sentence covering several ids is stored as one fact per id,
-// and brief mode must not repeat that sentence per id (observed live: envoy
-// v1.39.0 repeated one quote seven times). ids concatenate, severity shows the
-// strongest, and diverging applies_if conditions move to applies_if_any.
-// Quote-less entries are never merged. Summary counts stay per distinct issue —
-// this is presentation-level folding only.
-func mergeSharedQuotes(ordered []*briefFact) []*briefFact {
-	byQuote := map[string]*briefFact{}
-	out := make([]*briefFact, 0, len(ordered))
+// bucketRank orders buckets by urgency — action beats check beats plan.
+func bucketRank(b string) int {
+	switch b {
+	case "action":
+		return 0
+	case "check":
+		return 1
+	case "plan":
+		return 2
+	}
+	return 3
+}
+
+func mergeSharedQuotes(ordered []*briefChange) []*briefChange {
+	byQuote := map[string]*briefChange{}
+	out := make([]*briefChange, 0, len(ordered))
 	for _, bf := range ordered {
 		if bf.Quote == "" {
 			out = append(out, bf)
@@ -739,8 +747,8 @@ func mergeSharedQuotes(ordered []*briefFact) []*briefFact {
 		if severityRank[strings.ToLower(bf.Severity)] > severityRank[strings.ToLower(kept.Severity)] {
 			kept.Severity = bf.Severity
 		}
-		if bf.Mandatory {
-			kept.Mandatory = true
+		if bucketRank(bf.Bucket) < bucketRank(kept.Bucket) {
+			kept.Bucket = bf.Bucket // 병합해도 급한 쪽을 따른다
 		}
 		if bf.Condition != kept.Condition || len(kept.ConditionsAny) > 0 {
 			if kept.Condition != "" && !slices.Contains(kept.ConditionsAny, kept.Condition) {
@@ -753,4 +761,26 @@ func mergeSharedQuotes(ordered []*briefFact) []*briefFact {
 		}
 	}
 	return out
+}
+
+// ---------------------------------------------------------------------------
+// get_matter
+// ---------------------------------------------------------------------------
+
+type getMatterArgs struct {
+	MatterKey  string `json:"matter_key" jsonschema:"the matter_key taken verbatim from a change (case-sensitive; contains '/' and ':')"`
+	IncludeAll bool   `json:"include_all,omitempty" jsonschema:"also include the routine record (mostly bot dependency bumps); off by default"`
+}
+
+func getMatterTool(ctx context.Context, req *mcp.CallToolRequest, args getMatterArgs) (*mcp.CallToolResult, any, error) {
+	ctx = requestContext(ctx, "get_matter", req)
+	if args.MatterKey == "" {
+		return errResult(fmt.Errorf("matter_key is required — copy it from a change object")), nil, nil
+	}
+	raw, err := api.getMatter(ctx, args.MatterKey, args.IncludeAll)
+	if err != nil {
+		return errResult(err), nil, nil
+	}
+	res, err := jsonResult(raw)
+	return res, nil, err
 }
