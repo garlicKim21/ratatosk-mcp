@@ -28,7 +28,7 @@ Claude Desktop、kagent、自作の SDK エージェントなど、MCP に対応
 | Kubernetes で独自エージェントを運用（フレームワーク不問、CI ジョブ、SDK クライアント） | Helm チャート | [クラスタ内デプロイ](#クラスタ内への単独デプロイhelm) |
 | [kagent](https://kagent.dev) を使用中 | `kagent.enabled=true` の Helm オプション、またはマニフェスト | [kagent 統合](#kagent-統合) |
 
-4 つの方法はいずれも同じ 6 つのツールで同じ公開データを提供し、どのモード
+4 つの方法はいずれも同じ 7 つのツールで同じ公開データを提供し、どのモード
 でもアカウントも API キーも不要です。違いは 3 つあります。
 
 - **`check_stack` に渡した稼働中バージョンがどこまで行くか。** セルフホスト
@@ -501,7 +501,7 @@ ratatosk.io の `GET /v1` を呼ぶと API 自身の説明が返ります。API 
 
 ## 次のステップ
 
-- 6 つのツールのパラメータ・呼び出し例・実測レスポンス：[ツールリファレンス](tools.ja.md)
+- 7 つのツールのパラメータ・呼び出し例・実測レスポンス：[ツールリファレンス](tools.ja.md)
 - ツール一覧表（早見）：[README のツール表](../README.ja.md#ツール)
 - チャート値の全体と kagent トグル：[チャート README](../charts/ratatosk-mcp/README.ja.md)
 - kagent のマニフェストとサンプルエージェント：[kagent の例](../examples/kagent/README.ja.md)

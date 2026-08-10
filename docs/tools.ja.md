@@ -2,40 +2,75 @@
 
 [English](tools.en.md) · [한국어](tools.ko.md) · [日本語](tools.ja.md)
 
-このページは、ratatosk-mcp が提供する 6 つの
+このページは、ratatosk-mcp が提供する 7 つの
 ツール（[`check_stack`](#check_stack)、[`list_projects`](#list_projects)、
 [`list_releases`](#list_releases)、[`get_release`](#get_release)、
-[`facts_by_entity`](#facts_by_entity)、[`list_facts`](#list_facts)）の
-詳細リファレンスです。ツールごとに、用途、パラメータ一覧、実際の呼び出しと
-レスポンス、そしてエージェントに尋ねる質問の例をまとめました。サーバーへの
-接続方法（ホスト版エンドポイント、Docker、Helm、kagent）は
+[`changes_by_entity`](#changes_by_entity)、[`get_matter`](#get_matter)、
+[`list_changes`](#list_changes)）の詳細リファレンスです。ツールごとに、
+用途、パラメータ一覧、実際の呼び出しとレスポンス、そしてエージェントに
+尋ねる質問の例をまとめました。サーバーへの接続方法（ホスト版
+エンドポイント、Docker、Helm、kagent）は
 [インストールと使い方](install.ja.md)を見てください。
 
-先に用語を 2 つだけ定義します。**fact** とは、公式リリースノートから
-抽出した変更 1 件（セキュリティ修正、削除、非推奨化、デフォルト値の変更）
-のことです。各 fact には、その変更が対象とする正確な識別子（CVE id、
-フラグ、CRD、設定フィールド）と、根拠となるノート原文の引用が付きます。
-すべての fact には `info` から `critical` までの**深刻度（severity）**が
-付きます。
-
-> **2026-07-31 時点の実測**：この文書のすべての呼び出しとレスポンスは、
-> 2026-07-31 にホスト版エンドポイント `https://ratatosk.io/mcp`
-> （サーバー 0.6.2）へ実際に送って受け取ったものです。`check_stack` の例に
+> **2026-08-10 時点の実測**：この文書のすべての呼び出しとレスポンスは、
+> このリポジトリのサーバーをビルドし、公開 API `https://ratatosk.io` に
+> 接続して受け取ったものをそのまま載せています。`check_stack` の例に
 > 使ったスタック（コンポーネント 5 種と `version_source` の文言）は、
 > 匿名化した実クラスタのものです。リリースデータは毎時増え続けるため、
 > いま呼び出すと数値やリストは変わり得ますが、レスポンスの形は同じです。
 > 長いレスポンスは表示の都合で一部を `…` に省略しています。
 
+## 変更モデルを 1 ページで
+
+ここにあるツールはすべて同じ単位を返します。**変更（change）** 1 件とは、
+あるリリースで起きた出来事 1 つです。CVE を伴う修正、削除されたフラグ、
+名前が変わった設定フィールド、反転したデフォルト値 — そして、それを
+読み取った元のリリースノートの一文が必ず一緒に付いてきます。
+
+すべての変更は 3 つの軸で説明され、3 つの軸は互いに独立です。
+
+| 軸 | 値 | 答える問い |
+|---|---|---|
+| `family` | `security` · `breaking` · `deprecated` | これはどんな種類の出来事か？ |
+| `bucket` | `action` · `check` · `plan` | *いま* どう動けばよいか？ |
+| `applies_if` | 条件。可能なら構造化される | そもそも自分に関係あるか？ |
+
+**深刻度より先に `bucket` を読んでください。** `action` の項目は、その
+バージョン帯を通過するすべてのインストールに当てはまります。`check` の
+項目は `applies_if` が成り立つ環境にだけ当てはまるので、作業ではなく、
+実際の設定に照らして判定すべき問いです。`plan` の項目は将来のリリースに
+向けた予告です。ウェブサイトも、週次メールも、`check_stack` も同じこの
+フィールドで振り分けるため、3 つの表面は偶然ではなく構造として一致します。
+
+残りの 4 つのフィールドが大半の重みを担います。
+
+- **`matter_key`** — リリースをまたいだ「案件」の同一性。同じアドバイザリを
+  5 つのブランチで直したなら、`matter_key` は 1 つ、変更は 5 件です。
+  [`get_matter`](#get_matter) がこれを展開します。
+- **`applies_if.clauses`** — 条件を構造化できた場合、節ごとに
+  `kind`（`api`、`crd`、`feature_gate`、`flag`、`config_field`、`extension`、
+  `subsystem`、`dependency` など）と `name`、`verb`、`polarity` が付き、
+  `mode`（`all_of`、`any_of`、`universal`）でまとめられます。文章を解釈する
+  のではなく、これらの名前を実際の設定から探してください。
+- **`advisories`** — 引用された CVE・GHSA id と、その **現在の** 深刻度。
+  リリースノートが当時主張した深刻度とは異なることがあります。
+- **`quote`** — 根拠となった原文の一文。判断はいつでも `source_url` に
+  照らして確かめられるべきだからです。
+
+リリースの `changes` が `[]` なら、ノートは読まれ、運用者が対処すべきものは
+なかったという意味です。欠落ではなく **監査可能な沈黙** です。
+`notes_total` は、1 件ずつ表に出さないと決めた日常的な記録（ボットの
+依存関係更新など）の数です。
+
 ## 質問からツール呼び出しまで — 実例で追う
 
-エージェントにこう聞いたとします：
+エージェントにこう尋ねたとします：
 
 > 「うちのクラスタの状態を確認してください。」
 
-実際に使ってみて効果が高かった言い回しを、日本語に訳して載せています。
-クラスタを直接読めるエージェント（たとえば kagent 上で ratatosk-mcp と
-クラスタ読み取りツールを併用した場合）の実際の実行では、ツールはこの
-順序で呼ばれました：
+実際に使ってうまくいった言い回しをそのまま載せています。クラスタを直接
+読めるエージェント、たとえば kagent に ratatosk-mcp とクラスタ読み取り
+ツールを併せて接続した構成で実行したとき、ツールはこの順に呼ばれました：
 
 ```
 list_projects
@@ -44,149 +79,141 @@ k8s_get_resources  (daemonset, all_namespaces)
 k8s_get_resources  (deployment, all_namespaces)
 k8s_get_resources  (node)
 check_stack        (components ×5)
-get_release        (cilium, v1.20.0)               ← action_required の掘り下げ
+get_release        (cilium, v1.20.0)               ← action_required の深掘り
 k8s_get_resources  (customresourcedefinition)
 k8s_get_resources  (ciliumnodeconfig, all_namespaces)
 k8s_get_resources  (configmap, all_namespaces)
-k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if の切り分け
+k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if の判定
 ```
 
-表記の注意：`k8s_*` は kagent-tools（別の MCP）のクラスタ読み取りツール
-で、この中の ratatosk ツールは `list_projects`・`check_stack`・
-`get_release` です。
+名前について一言：`k8s_*` は kagent-tools（別の MCP サーバー）が提供する
+クラスタ読み取りツールです。この並びのうち ratatosk のツールは
+`list_projects`、`check_stack`、`get_release` の 3 つです。
 
-流れを整理すると 3 段階です。
+この経路は 3 段階に分かれます。
 
-**段階 1 — `list_projects` で一覧を確定。** クラスタで見た名前を、ほかの
-ツールが受け取る正規スラッグに変換し、`cluster_core:true`（クラスタの
-基盤レイヤー。コントロールプレーン、ランタイム、DNS、CNI など）の印で
-点検に含める候補を選びます。
+**第 1 段階 — `list_projects` で名簿を確定する。** クラスタで見えた名前を、
+他のツールが受け取る正式なスラグに対応づける段階です。名前が異なる場合は
+`image_aliases` が解決します。クラスタの `cilium-envoy` デーモンセットは
+`envoy` プロジェクトです。
 
-**段階 2 — バージョンを実際のリソースから読み取る。** `k8s_*` ツールで
-Pod・DaemonSet・Node の status から、稼働中のバージョンとその出どころを
-把握します。そうして出来上がったのが、下の check_stack 節の呼び出し例
-です。コンポーネント 5 種（kubernetes/containerd/cilium/envoy/coredns）と
-その `version_source` の文言です。
+**第 2 段階 — スタック全体を `check_stack` 1 回で。** 5 回に分けて尋ねる
+代わりにコンポーネント 5 つをまとめて送り、それぞれにバージョンをどこで
+読んだかを `version_source` として添えます。
 
-**段階 3 — `check_stack` のブリーフィング、そして条件の判定。**
-ブリーフィングで cilium の `action_required` 2 件（v1.20.0 の docker
-libnetwork プラグイン削除、proxylib/Kafka ポリシー削除）を確認し、
-`get_release(cilium, v1.20.0)` で根拠となる原文まで掘り下げます。
-`check_config` の「v2alpha1 CiliumNodeConfig CRD を使っている場合」という
-条件については、CRD 一覧と `kube-system/cilium-config` を実際に読み、
-適用の有無を判定します。「ブリーフィングを受け取り、条件を実際のリソースで
-判定する」という `check_stack` の設計意図が、そのまま実行の流れになった
-例です。
+**第 3 段階 — 判定し、深掘りする。** ブリーフィングは全員に当てはまるものと
+設定次第のものに分かれ、エージェントは両側を処理しました。
+`action_required` の項目のリリースは `get_release` で覗き、ブリーフィング
+だけでは答えられない `applies_if` は `cilium-config` を読んで判定しています。
 
-何が返ってきたかは、下の check_stack 節の実測レスポンスと、次の節
-「ブリーフィングの読み方」でそのまま見られます。
+大事なのは答えの形です。エージェントは「アップデートがあります」とは
+言いませんでした。無条件に当てはまる項目はどれか、実際の設定に照らして
+確認したものはどれか、確認できなかったものはどれかを分けて報告しています。
 
-条件の判定をさらに確実に引き出したいなら、やはり実際に効果が確認された
-次の文言のように、判定ルールを質問に含めてください：
+## check_stack ブリーフィングの読み方
 
-> 「クラスタで実際に稼働しているコンポーネントのバージョンを、コントロール
-> プレーン、ノードランタイム、ネットワーキング（CNI とその周辺）、DNS まで
-> 含めて実際のリソースから読み、ratatosk のリリース情報と突き合わせて、
-> いま私たちに適用される問題があるか点検してください。条件付きの問題は該当する
-> 設定を実際に読んで確認できた場合のみ適用/非適用を判定し、確認できなかった
-> 条件は『確認不可』に分類してください。」
+既定の `check_stack` レスポンス（`detail:"brief"`）は、コンポーネントごとに
+同じ構造です。下の [check_stack の節](#check_stack)にある実測レスポンスを
+手元に置いて読んでください。
 
-実際に観測されたアンチパターンも 1 つ挙げておきます。網羅的な列挙を求める
-質問は、必ず判定ルール（「確認できなかったものは確認不可へ」）と
-組み合わせてください。網羅を求めるだけでは、モデルは実物を読まずに、
-もっともらしい値で空欄を埋めてしまいます。
-
-## check_stack のブリーフィングの読み方
-
-`check_stack` のデフォルトレスポンス（`detail:"brief"`）は、どの
-コンポーネントでも同じ構造で返ります。下の check_stack 節の
-実測レスポンスを手元に置いて読んでください。
-
-1. **`summary` — 集計。** 稼働バージョンより新しい fact 数
-   （`new_facts`）、マージ後の重複を除いた項目数（`distinct_issues`）、
-   条件なしで該当する fact 数（`mandatory`）、そして深刻度別・タイプ別の
-   内訳。スキャンした全 fact 数は `facts_scanned` です。実測レスポンスの
-   envoy が良い例です：新しい fact 75 件がマージを経て 40 件の項目に
-   減っています。なお `distinct_issues` は引用文のマージ（下の 5 番）より
-   前の基準で数えるため、3 つのリストの項目数の合計より大きくなることが
-   あります。
-2. **`action_required` — このバージョン範囲を通るすべてのインストールに
-   該当する critical/high。** 各項目には
-   リリースノート原文の引用（`quote`）と CVE・アドバイザリ id（`ids`）が
-   付きます。実測レスポンスでは envoy に 5 件（fact 211 の TLS SAN 認証
-   バイパス critical を含む）、cilium に 2 件（libnetwork・proxylib の
-   削除）がここに入りました。
-3. **`check_config` — 設定の確認が必要な critical/high。** `applies_if` の
-   条件が成り立つときだけ該当する項目です。条件を実際の設定で確認する
-   までは対応事項ではなく、条件が成り立たなければアップグレードの理由でも
-   ありません — その場合の `fixed_in` は「後でその機能を有効にするなら、
-   最低でもこのバージョン以上が必要」という前提条件として読みます。
-   サーバーが条件の対象を構造化して保持している場合は
-   `applies_if_target`（kind と name）が探すべきものを指し示します。
-   実測レスポンスの cilium fact 614 が
-   その形の例です — `applies_if`「uses the cilium.io/v2alpha1 CiliumNodeConfig
-   CRD」に `applies_if_target` `{ "kind": "crd", … }` が付いていて、上の
-   シナリオでエージェントが CRD 一覧を実際に読みに行った理由になって
-   います。envoy 側には fact 215（critical、「if you proxy HTTP/3 to
-   HTTP/1 backends」）など 11 件がここにあります。
-4. **`other_facts` — 残りのすべてを 1 行ずつ。** medium 以下の項目が
-   fact ごとに 1 行で表示されます。実測レスポンスの coredns は 5 件すべて
-   medium 以下なので、この一覧にだけ現れます。
-5. **マージのルール。** 同じ引用文を共有する fact は 1 項目に
-   マージされ、id がまとめて並びます（条件が異なる場合は
-   `applies_if_any`）。実測レスポンスの envoy fact 466 がその形で、
-   CVE id 5 件が 1 項目にまとまり、異なる条件 3 つが `applies_if_any` に
-   並んでいます。同じアドバイザリが複数のリリースブランチで修正
-   された場合も 1 項目です — 実測レスポンスの envoy fact 211 に実際に
-   付いている `same_issue_also_addressed_in: ["v1.37.5", "v1.38.3"]` が
-   それです。このとき表示される深刻度はそのアドバイザリグループの最大
-   深刻度です。
-6. **`note` — コンポーネントごとの状態表示。** 実測レスポンスには両方の
-   種類が入っています。kubernetes・containerd の「tracked by ratatosk; no
-   facts on record — releases so far were routine」は、追跡中だが静かな
-   状態で、追跡していない状態（`tracked:false` — fact がないことは、
-   安全を意味しません）と区別されます。cilium・coredns の「older than
-   every release on record … treat it as partial, and re-check」は、稼働
-   バージョンが記録上の最も古いリリースよりも古いという警告です —
-   サーバーはユーザーの環境を見られないため、申告されたバージョンを
-   裏取りする唯一の手段がこの表示であり、バージョンを実際のリソースから
-   読み直すべきというシグナルです。
-7. **`hint` と `privacy`。** `hint` には、このブリーフィングが推奨ではなく
-   データの分類であることと、次に使うツール（全文は `detail:"full"`、
-   掘り下げは `get_release`・`facts_by_entity`）が示されます。`privacy` は
-   この呼び出しでバージョンがどこまで送信されたかを明示します。
+1. **`changes_scanned` と `summary` — 数字。** `changes_scanned` はその
+   プロジェクトに記録されている変更の総数、`summary.new_changes` はその
+   うち実行中のバージョンより上にあるものの数です。`distinct_matters` は
+   同じ `matter_key` の繰り返しをまとめた後に残る数です。実測レスポンスの
+   containerd がその例で、35 件を走査して 11 件が新しく、案件としては 9 件に
+   なります。`by_severity`・`by_family`・`by_bucket` はいずれも、生の変更
+   ではなくまとめた後の案件を数えます。
+2. **3 つのリストは `bucket` だけで分かれます** — `action` は
+   `action_required` へ、`check` は `check_config` へ、`plan` は
+   `other_changes` へ。深刻度で分けているのでは **ありません**。実測
+   レスポンスでは containerd の `check_config` に `low` が 5 件あり、coredns の
+   `action_required` には `medium` が 1 件あります。深刻度はリストの
+   **なかで** 緊急度を並べるもので、どのリストに入るかを決めるのはバケットです。
+3. **`action_required` — 設定に関わらず対処するもの。** containerd の最初の
+   項目はアドバイザリ id を 10 個抱えたセキュリティのロールアップで、その
+   最悪のものが `critical` なので `critical` です。ここに並ぶ項目はたいてい
+   `applies_if` を持ちません。いくつかは条件付きですが、それはそのプロジェクト
+   では事実上普遍的な条件だからです（例：「runs http2」が付いた envoy の項目）。
+4. **`check_config` — 勧める前に条件を判定すること。** ここに並ぶ項目は
+   すべて `applies_if` を持ちます。実際の設定に照らして確認するまで、これは
+   作業ではありませんし、条件が成り立たないことはアップグレードの理由には
+   なりません。代わりに前向きに読んでください。その項目の `version` は、
+   `applies_if` が言うものを **有効にする前に** 到達しているべき最小バージョン
+   です。`applies_if_targets` は実際の設定から探す名前を並べます —
+   containerd の `["CreateContainer", "sandbox"]`、cilium の `["ipBlock"]` の
+   ように。`applies_if` が文章だけのときはこのフィールドはありません。
+5. **`other_changes` — `plan` バケットを 1 行ずつ。** 将来のリリースに向けた
+   非推奨の予告です。containerd の 2 件はどちらも `window.deprecated_in` を
+   持ち、それが時計の動き始めた時点です。
+6. **ここでの `severity` は ratatosk ではなくこのサーバーが計算します。**
+   その項目の `advisories` のうち最も高い深刻度で、アドバイザリがなければ
+   `security` ファミリーは `high`、それ以外はバケットが決めます —
+   `action` は `medium`、`check` は `low`、`plan` は `info`。cilium の
+   `[security]` タグ付き依存関係更新が `advisories` なしで `high` に見えるのは
+   このためです。アドバイザリそのもので判断したいなら
+   [`get_release`](#get_release) か
+   [`changes_by_entity`](#changes_by_entity) を使ってください。そちらは
+   アドバイザリをそれぞれの深刻度とともに返します。
+7. **マージ規則が 2 つ、どちらも実測レスポンスに現れています。** ブランチを
+   またいで `matter_key` が同じ変更は最も早い修正に畳まれ、残りは
+   `same_matter_also_addressed_in` に載ります。運用者は一度上げるのだから、
+   その案件を閉じる最も近いリリースこそが実行可能な答えだからです。これとは
+   別に、**1 つのリリースのなかで** 引用文が同じ変更は id をまとめて 1 項目に
+   統合され、条件が異なる場合は `applies_if` の代わりに `applies_if_any` が
+   付きます。統合された項目は、構成員のうち最も高い深刻度と最も急ぐバケットを
+   採ります。
+8. **`note` — コンポーネントごとの状態マーカー。** 2 種類が現れます。
+   `tracked:false` に伴う "NOT tracked by ratatosk — zero changes means no
+   coverage here, not safety" と、"running version … is older than every
+   release on record" です。後者は、バージョンの申告に対してここで可能な
+   唯一の照合です。このサーバーはあなたの環境を見られないので、記録全体より
+   古いバージョンは、生きたリソースから読み直せという合図です。どちらの
+   マーカーもなく `new_changes: 0` なら静かなケース — 追跡していて、走査
+   していて、実行中のバージョンより上に何もない、ということです。実測
+   レスポンスの kubernetes がそれで、45 件を走査して新規 0 件です。
+9. **`hint` と `privacy`。** `hint` はこのブリーフィングが推奨ではなく
+   データの分類であることを改めて述べ、次に使うツールを指し示します。
+   `privacy` の行は、この呼び出しであなたのバージョンがどこまで行ったかを
+   記録します。
 
 ## check_stack
 
-稼働中のコンポーネントバージョンの一覧を受け取り、コンポーネントごとに
-アップグレード経路（稼働バージョンより新しいリリース群）にある fact を
-返します。「アップグレード前にやることはある？」という質問の最初の
-ツールで、複数プロジェクトを 1 回の呼び出しにまとめられるため、
-プロジェクトごとにツールを個別に呼び出すよりスタック単位の質問に
-向いています。
-バージョン比較はサーバープロセスの中で行われるので、セルフホストすれば
-稼働バージョンはインフラを離れません。特定のリリース 1 件を深く見るなら
-`get_release`、特定の CVE・フラグ 1 つを追うなら `facts_by_entity` に
-進んでください。
+実行中のコンポーネントのバージョン一覧を受け取り、コンポーネントごとに
+アップグレード経路上の変更 — 実行中のバージョンより新しいリリース群 — を
+返します。「上げる前に対処すべきものはあるか？」が問いなら、まず手に取る
+ツールです。1 回の呼び出しが複数のプロジェクトを覆うので、スタック全体を
+問う質問には、他のツールをプロジェクトごとに呼ぶよりこちらが適します。
+
+バージョンの比較は **このサーバープロセスのなか** で行われます。上流へ出て
+いくのはプロジェクトのスラグだけで、このツールはサーバー側の
+`/v1/upgrade` エンドポイントを決して呼びません。サーバーを自分で動かせば
+実行中のバージョンはあなたのインフラから出ませんし、ホスト版
+エンドポイントではサーバーのメモリを通るだけで記録されません。
+
+1 つのリリースを深く見るなら `get_release`、CVE やフラグ 1 つを追うなら
+`changes_by_entity`、1 つの案件を直したすべてのブランチを見るなら
+`get_matter` へ進んでください。
 
 ### パラメータ
 
-| パラメータ | 必須 | 型 | デフォルト | 説明 |
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
 |---|---|---|---|---|
-| `components` | はい | array | — | 点検する稼働中のスタック。項目の形式は下記 |
-| `components[].project` | はい | string | — | プロジェクトスラッグ（例：`envoy`）。正式な値は `list_projects` の `slug` |
-| `components[].version` | はい | string | — | いま稼働中のバージョン（例：`v1.36.8`） |
-| `components[].target_version` | いいえ | string | *（なし＝最新まで全部）* | アップグレード先のバージョン。稼働バージョンより新しい値である必要があり、`稼働バージョン < バージョン ≤ target` の fact だけが返ります。稼働バージョン以下の値は範囲が空になるため無視され、`note` で案内されます |
-| `components[].version_source` | いいえ | string | *（なし）* | バージョンをどこで読んだか（例：`daemonset/cilium image tag`、ユーザーの申告）。レスポンスにそのまま返されるため、あとから出どころを検証できます。サーバーはユーザーの環境を見られないためバージョンを検証できません — 「ブリーフィングの読み方」で説明した `note` の表示が唯一のクロスチェックです |
-| `detail` | いいえ | string | `brief` | `brief`：要約 + critical/high + 残りは 1 行ずつ。`full`：すべての fact を省略せずに返す — コンポーネントあたり 50 件の上限があり、超過は `relevant_facts_omitted` で示されるので、`severity_min` や `target_version` で絞ってください |
-| `severity_min` | いいえ | string | *（なし＝全部）* | この深刻度以上のみ：`info`・`low`・`medium`・`high`・`critical` |
+| `components` | はい | array | — | 確認する実行中スタック。項目の形は下記 |
+| `components[].project` | はい | string | — | プロジェクトスラグ（例：`envoy`）。正典は `list_projects` の `slug` |
+| `components[].version` | はい | string | — | 現在実行中のバージョン（例：`v1.36.8`） |
+| `components[].target_version` | いいえ | string | *(なし = 最新まですべて)* | アップグレード先。実行中バージョンより厳密に上である必要があり、`running < version <= target` の変更だけが返ります。実行中バージョン以下を指定すると範囲が空になるため無視され、`note` が付きます |
+| `components[].version_source` | いいえ | string | *(なし)* | そのバージョンをどこで読んだか（例：`daemonset/cilium image tag`、あるいはユーザーが申告したという事実）。後から監査できるようそのまま返されます。サーバーはあなたの環境を見られず、バージョンを検証できません — 上で説明した `note` マーカーが、ここで可能な唯一の照合です |
+| `detail` | いいえ | string | `brief` | `brief`：`summary` とバケット別の 3 リスト（マージ済み・1 行ずつ）。`full`：該当する変更を全文で `relevant_changes` に（マージなし・サマリなし） — コンポーネントあたり 50 件で打ち切り、切られた数は `relevant_changes_omitted` に |
+| `severity_min` | いいえ | string | *(なし = すべて)* | この深刻度以上のみ：`info`、`low`、`medium`、`high`、`critical` |
+
+`brief` では `other_changes` の末尾はコンポーネントあたり 100 件で打ち切られ、
+切られた数は `other_changes_omitted` に載ります。黙って捨てることはありません。
 
 ### 呼び出し例
 
-上のシナリオのスタックを、ホスト版エンドポイントへそのまま送った
-呼び出しです。下の JSON はツールの引数（`arguments`）だけを載せています。
-これを包む JSON-RPC の送信形式は
-[インストールと使い方](install.ja.md)にあります：
+上のシナリオに出てきたスタックです。以下の JSON はツールの `arguments`
+オブジェクトだけで、これが載る JSON-RPC のエンベロープは
+[インストールと使い方](install.ja.md)で扱います。
 
 ```json
 {
@@ -209,173 +236,297 @@ libnetwork プラグイン削除、proxylib/Kafka ポリシー削除）を確認
       "project": "kubernetes",
       "running_version": "v1.36.1",
       "version_source": "kubectl version (server)",
-      "tracked": true,
-      "note": "tracked by ratatosk; no facts on record — releases so far were routine",
-      "facts_scanned": 0,
-      "summary": { "new_facts": 0, "distinct_issues": 0, "mandatory": 0, "by_severity": {}, "by_type": {} }
+      "changes_scanned": 45,
+      "summary": { "new_changes": 0, "distinct_matters": 0, "by_severity": {}, "by_family": {}, "by_bucket": {} }
     },
     {
       "project": "containerd",
       "running_version": "2.2.4",
       "version_source": "node status containerRuntimeVersion",
-      "tracked": true,
-      "note": "tracked by ratatosk; no facts on record — releases so far were routine",
-      "facts_scanned": 0,
-      "summary": { … }
+      "changes_scanned": 35,
+      "summary": {
+        "new_changes": 11, "distinct_matters": 9,
+        "by_severity": { "critical": 1, "high": 1, "low": 5, "info": 2 },
+        "by_family": { "breaking": 5, "deprecated": 2, "security": 2 },
+        "by_bucket": { "action": 2, "check": 5, "plan": 2 }
+      },
+      "action_required": [
+        {
+          "change_id": "containerd:v2.2.5:a74c2b48",
+          "matter_key": "containerd/advisory:cve-2026-47262",
+          "version": "v2.2.5",
+          "kind": "defect_corrected",
+          "family": "security",
+          "bucket": "action",
+          "severity": "critical",
+          "quote": "CVE-2026-50195",
+          "advisories": [
+            "CVE-2026-47262", "CVE-2026-50195", "CVE-2026-53488", "CVE-2026-53489",
+            "CVE-2026-53492", "GHSA-33vj-92qq-66hc", "GHSA-cvxm-645q-p574",
+            "GHSA-jpcc-p29g-p8mq", "GHSA-rgh6-rfwx-v388", "GHSA-xhf5-7wjv-pqxp"
+          ],
+          "same_matter_also_addressed_in": [ "v2.3.2" ]
+        },
+        { "change_id": "containerd:v2.3.1:040369eb", "version": "v2.3.1", "severity": "high",
+          "family": "security", "bucket": "action", "quote": "* [**CVE-2026-46680**]",
+          "advisories": [ "CVE-2026-46680", "GHSA-fqw6-gf59-qr4w" ] }
+      ],
+      "check_config": [
+        {
+          "change_id": "containerd:v2.2.6:b8305908",
+          "matter_key": "containerd/api/createcontainer#constraint_changed",
+          "version": "v2.2.6",
+          "kind": "constraint_changed",
+          "family": "breaking",
+          "bucket": "check",
+          "severity": "low",
+          "applies_if": "uses the CreateContainer API and runs sandbox",
+          "applies_if_targets": [ "CreateContainer", "sandbox" ],
+          "quote": "* cri: reject CreateContainer when sandbox is not running (#13669)",
+          "same_matter_also_addressed_in": [ "v2.3.3" ]
+        },
+        { "change_id": "containerd:v2.3.1:4dff4eb6", "version": "v2.3.1", "severity": "low",
+          "kind": "removed", "family": "breaking", "bucket": "check",
+          "applies_if": "runs user namespace", "applies_if_targets": [ "user namespace" ],
+          "window": { "removed_in": "v2.3.1" },
+          "quote": "* Disable overlayfs \"rebase\" capability when running in user namespace" },
+        …3 件省略…
+      ],
+      "other_changes": [
+        { "change_id": "containerd:v2.3.0:a4f90153",
+          "matter_key": "containerd/api/shim.command#deprecated",
+          "version": "v2.3.0", "kind": "deprecated", "family": "deprecated",
+          "bucket": "plan", "severity": "info",
+          "applies_if": "uses the shim.Command API",
+          "applies_if_targets": [ "shim.Command" ],
+          "window": { "deprecated_in": "2.3" },
+          "quote": "* Deprecate shim.Command" },
+        …1 件省略…
+      ]
     },
     {
       "project": "cilium",
       "running_version": "v1.19.4",
       "version_source": "daemonset/cilium image tag",
-      "note": "running version v1.19.4 is older than every release on record (earliest with facts: v1.19.6) — this covers the reviewed window only, so treat it as partial, and re-check that the running version was read off a live resource",
-      "facts_scanned": 24,
+      "changes_scanned": 122,
       "summary": {
-        "new_facts": 24, "distinct_issues": 24, "mandatory": 19,
-        "by_severity": { "high": 4, "medium": 12, "low": 8 },
-        "by_type": { "capability_removed": 12, "capability_deprecated": 5, "behavior_changed": 3, … }
+        "new_changes": 51, "distinct_matters": 48,
+        "by_severity": { "high": 7, "medium": 3, "low": 32, "info": 6 },
+        "by_family": { "breaking": 35, "security": 7, "deprecated": 6 },
+        "by_bucket": { "action": 8, "check": 34, "plan": 6 }
       },
       "action_required": [
-        {
-          "fact_id": 612, "version": "v1.20.0", "fact_type": "capability_removed",
-          "severity": "high", "mandatory": true, "removed_in": "v1.20.0",
-          "quote": "As previously announced, docker libnetwork plugin as been sunset and is no longer available."
-        },
-        …1 件省略…
+        { "change_id": "cilium:v1.20.0:20adda37",
+          "matter_key": "cilium/config_field/cni configuration version#default_changed",
+          "version": "v1.20.0", "kind": "default_changed", "family": "breaking",
+          "bucket": "action", "severity": "medium",
+          "window": { "introduced_in": "v1.20.0" },
+          "quote": "the default CNI configuration version moves from 0.3.1 to 1.0.0." },
+        { "change_id": "cilium:v1.20.0:4bb6c02d", "version": "v1.20.0", "severity": "high",
+          "family": "security", "bucket": "action",
+          "quote": "fix(deps): update module google.golang.org/grpc to v1.82.1 [security] (v1.20)" },
+        …6 件省略…
       ],
       "check_config": [
-        …1 件省略…
-        {
-          "fact_id": 614, "version": "v1.20.0", "fact_type": "api_version_changed",
-          "severity": "high", "mandatory": true,
-          "applies_if": "uses the cilium.io/v2alpha1 CiliumNodeConfig CRD",
-          "applies_if_target": { "kind": "crd", "name": "cilium.io/v2alpha1 CiliumNodeConfig" },
-          "removed_in": "v1.20.0", "deprecated_in": "v1.16",
-          "quote": "Remove deprecated `v2alpha1` `CiliumNodeConfig` API that was promoted to `v2` in cilium 1.16."
-        }
+        { "change_id": "cilium:v1.19.5:41a4ef5b",
+          "matter_key": "cilium/config_field/l2podannouncements.interface#renamed",
+          "version": "v1.19.5", "kind": "renamed", "family": "breaking",
+          "bucket": "check", "severity": "low",
+          "applies_if": "enables L2 pod announcements",
+          "applies_if_targets": [ "L2 pod announcements" ],
+          "window": { "removed_in": "v1.19.5" },
+          "quote": "Remove defunct `l2podAnnouncements.interface` Helm value that rendered a configmap key the agent no longer recognises, causing crash-loops when L2 pod announcements were enabled. Users must use `l2podAnnouncements.interfacePattern` instead." },
+        { "change_id": "cilium:v1.19.5:9caac3a9",
+          "matter_key": "cilium/api/ipblock#defect_corrected",
+          "version": "v1.19.5", "kind": "defect_corrected", "family": "security",
+          "bucket": "check", "severity": "high",
+          "applies_if": "configures the ipBlock API",
+          "applies_if_targets": [ "ipBlock" ],
+          "quote": "Fix wildcard namespace bypass for selectorless ipBlock rules" },
+        …32 件省略…
       ],
-      "other_facts": [ …20 件省略… ]
+      "other_changes": [ …6 件… ]
     },
     {
       "project": "envoy",
       "running_version": "v1.36.7",
       "version_source": "daemonset/cilium-envoy image tag",
-      "facts_scanned": 90,
+      "changes_scanned": 124,
       "summary": {
-        "new_facts": 75, "distinct_issues": 40, "mandatory": 38,
-        "by_severity": { "critical": 3, "high": 13, "medium": 22, "low": 2 },
-        "by_type": { "security_fix": 30, "behavior_changed": 3, "default_changed": 3, … }
+        "new_changes": 90, "distinct_matters": 45,
+        "by_severity": { "high": 12, "medium": 15, "low": 15, "info": 3 },
+        "by_family": { "security": 26, "breaking": 16, "deprecated": 3 },
+        "by_bucket": { "action": 4, "check": 38, "plan": 3 }
       },
       "action_required": [
-        …1 件省略…
-        {
-          "fact_id": 211, "version": "v1.36.9", "fact_type": "security_fix",
-          "severity": "critical", "mandatory": true, "fixed_in": "v1.36.9",
-          "quote": "Embedded NUL in TLS SAN Truncation, Auth Bypass",
-          "ids": [ "CVE-2026-47778", "GHSA-f8x4-rw5x-f3r7" ],
-          "same_issue_also_addressed_in": [ "v1.37.5", "v1.38.3" ]
-        },
-        …2 件省略…
-        {
-          "fact_id": 347, "version": "v1.37.5", "fact_type": "security_fix",
-          "severity": "high", "mandatory": true, "fixed_in": "v1.37.5",
-          "quote": "CVE-2026-47220: REQUESTED_SERVER_NAME crash",
-          "ids": [ "CVE-2026-47220", "GHSA-j9wh-4qfm-wf2v" ],
-          "same_issue_also_addressed_in": [ "v1.38.3" ]
-        }
+        { "change_id": "envoy:v1.36.9:d69a1e5f",
+          "matter_key": "envoy/advisory:cve-2026-47261",
+          "version": "v1.36.9", "family": "security", "bucket": "action", "severity": "high",
+          "quote": "wasm: bumped `com_github_wasmtime` to resolve CVE-2026-47261.",
+          "advisories": [ "CVE-2026-47261" ],
+          "same_matter_also_addressed_in": [ "v1.37.5", "v1.38.3" ] },
+        …3 件省略…
       ],
       "check_config": [
-        …8 件省略…
-        {
-          "fact_id": 215, "version": "v1.36.9", "fact_type": "security_fix",
-          "severity": "critical", "mandatory": true,
-          "applies_if": "if you proxy HTTP/3 to HTTP/1 backends",
-          "fixed_in": "v1.36.9",
+        { "change_id": "envoy:v1.36.9:7ccbb3ff",
+          "matter_key": "envoy/advisory:cve-2026-48743",
+          "version": "v1.36.9", "family": "security", "bucket": "check", "severity": "high",
+          "applies_if": "uses HTTP/3 and uses HTTP/1 and uses headers-only request and configures the Content-Length setting",
+          "applies_if_targets": [ "HTTP/3", "HTTP/1", "headers-only request", "Content-Length" ],
           "quote": "HTTP/3 to HTTP/1 request smuggling via headers-only request with nonzero Content-Length",
-          "ids": [ "CVE-2026-48743", "GHSA-8phg-2h2q-jgxf" ],
-          "same_issue_also_addressed_in": [ "v1.37.5", "v1.38.3" ]
-        },
-        …2 件省略…
+          "advisories": [ "CVE-2026-48743", "GHSA-8phg-2h2q-jgxf" ],
+          "same_matter_also_addressed_in": [ "v1.37.5", "v1.38.3" ] },
+        …37 件省略…
       ],
-      "other_facts": [
-        …7 件省略…
-        {
-          "fact_id": 466, "version": "v1.39.0", "fact_type": "security_fix",
-          "severity": "medium", "mandatory": true,
-          "applies_if_any": [
-            "uses the ext_authz extension",
-            "uses the ext_proc extension",
-            "uses the OAuth2 extension"
-          ],
-          "applies_if_target": { "kind": "extension", "name": "ext_authz" },
-          "fixed_in": "v1.39.0",
-          "quote": "Security fixes were added for ext_authz (**CVE-2026-47205**), ext_proc (**CVE-2026-47207**), gRPC stats (**CVE-2026-47204**), internal redirects (**CVE-2026-47221**), and OAuth2 lifecycle handling (**CVE-2026-48090**).",
-          "ids": [ "CVE-2026-47205", "CVE-2026-47207", "CVE-2026-47204", "CVE-2026-47221", "CVE-2026-48090" ]
-        },
-        …6 件省略…
-      ]
+      "other_changes": [ …3 件… ]
     },
     {
       "project": "coredns",
       "running_version": "v1.14.1",
       "version_source": "deployment/coredns image tag",
-      "note": "running version v1.14.1 is older than every release on record (earliest with facts: v1.14.5) — …",
-      "facts_scanned": 5,
+      "changes_scanned": 11,
       "summary": {
-        "new_facts": 5, "distinct_issues": 5, "mandatory": 2,
-        "by_severity": { "medium": 2, "low": 3 }, "by_type": { "behavior_changed": 3, "default_changed": 2 }
+        "new_changes": 8, "distinct_matters": 8,
+        "by_severity": { "critical": 1, "high": 3, "medium": 1, "low": 3 },
+        "by_family": { "breaking": 4, "security": 4 },
+        "by_bucket": { "action": 3, "check": 5 }
       },
-      "other_facts": [
-        { "fact_id": 432, "version": "v1.14.5", "fact_type": "default_changed", "severity": "medium",
-          "mandatory": true, "fixed_in": "v1.14.5", "quote": "core: Use Go TLS defaults" },
-        …4 件省略…
-      ]
+      "action_required": [ …3 件… ],
+      "check_config": [ …5 件… ]
     }
   ],
-  "hint": "briefing (a data classification, not a recommendation …): action_required = critical/high that applies to every install of this version. check_config = critical/high that applies ONLY IF applies_if holds — …",
+  "hint": "briefing (a data classification, not a recommendation — changes are provided without warranty and the decision stays with the operator): …",
   "privacy": "versions were compared locally; only project slugs were sent to the server"
 }
 ```
 
-一つのレスポンスの中に、異なる状態が 3 つ共存していることに注目して
-ください。
+このレスポンス 1 つに 4 つの状態が同居しています。
 
-- **kubernetes・containerd** — fact 0 件ですが、`note` には「追跡中で、
-  これまでのリリースには特記事項がなかった」と示されています。追跡して
-  いない状態（`tracked:false`）とは別の状態です。
-- **cilium・coredns** — 稼働バージョンが記録上の最も古いリリースよりも
-  古く、`note` がレビュー範囲が部分的だと警告しています — バージョンが
-  実際のリソースから読んだ値かどうか、確認し直すべきというシグナルです。
-- **envoy** — 新しい fact 75 件が 40 件の項目にマージされました。
-  同じアドバイザリが v1.36.9・v1.37.5・v1.38.3 の 3 ブランチで修正されて
-  いますが、`same_issue_also_addressed_in` でマージされ、1 項目ずつだけ
-  残ったためです。
+- **kubernetes** — 記録されている変更は 45 件ですが、v1.36.1 より上にある
+  ものはありません。追跡していて、走査していて、静かです。警告することが
+  ないので `note` もありません。
+- **containerd** — こぢんまりしたケース。新しい変更 11 件が案件 9 件になり、
+  バケット別に 2 / 5 / 2 に分かれます。`action_required` の最初の項目が、
+  1 つのロールアップから出たアドバイザリ id 10 個を抱えています。
+- **cilium と envoy** — 混み合ったケースであり、バケットで分ける理由でも
+  あります。envoy は新しい変更が 90 件ありますが、`action_required` に
+  落ちるのは 4 件で、38 件は作業ではなく設定についての問いです。
+- **coredns** — 他のコンポーネントが静かなスタックに `critical` が 1 つ
+  座っています。スタック全体をまとめて問う意味はまさにここにあります。
+
+追跡していないスラグはまた違って見えます。ratatosk が扱っていない
+`nginx-ingress` を尋ねると：
+
+```json
+{
+  "project": "nginx-ingress",
+  "running_version": "v1.14.0",
+  "version_source": "user-stated",
+  "tracked": false,
+  "note": "NOT tracked by ratatosk — zero changes means no coverage here, not safety",
+  "changes_scanned": 0,
+  "summary": { "new_changes": 0, "distinct_matters": 0, "by_severity": {}, "by_family": {}, "by_bucket": {} }
+}
+```
+
+スラグを推測すべきでない理由がこれです。結果が「該当なし」として返り、それが
+安全のように読めてしまいます。確信がなければ `list_projects` を呼んでください。
+
+記録全体より低いバージョンを実行中なら、カバレッジのマーカーが付きます：
+
+```json
+{
+  "project": "coredns",
+  "running_version": "v1.9.0",
+  "note": "running version v1.9.0 is older than every release on record (earliest on record: v1.14.0) — this covers the reviewed window only, so treat it as partial, and re-check that the running version was read off a live resource",
+  "changes_scanned": 11,
+  "summary": { "new_changes": 11, "distinct_matters": 11, … }
+}
+```
+
+### `detail:"full"`
+
+`full` は長いレスポンスではなく **別の** レスポンスです。コンポーネントから
+`summary` とバケット別の 3 リストが消え、`relevant_changes` が入ります。
+該当する変更をサーバーの素の形のまま — `applies_if` は構造化された
+オブジェクト、`advisories` はそれぞれの深刻度付き、`subjects` と `seq` まで —
+マージせずに返すので、同じ `matter_key` の繰り返しもすべて現れます。
+
+```json
+{ "detail": "full", "severity_min": "high",
+  "components": [ { "project": "coredns", "version": "v1.14.1", "version_source": "deployment/coredns image tag" } ] }
+```
+
+```json
+{
+  "components": [
+    {
+      "project": "coredns",
+      "running_version": "v1.14.1",
+      "version_source": "deployment/coredns image tag",
+      "changes_scanned": 11,
+      "relevant_changes": [
+        {
+          "change_id": "coredns:v1.14.2:83ed5f33",
+          "matter_key": "coredns/advisory:cve-2026-25679",
+          "project": "coredns", "version": "v1.14.2", "version_rank": [ 1, 14, 2 ],
+          "released_at": "2026-03-06T06:34:58.000Z",
+          "family": "security", "actionability": "act", "bucket": "action",
+          "kind": "value_changed",
+          "applies_if": { "evaluable": false, "mode": "universal", "clauses": [], "raw": null },
+          "advisories": [
+            { "id": "CVE-2026-25679", "severity": "high" },
+            { "id": "CVE-2026-27137", "severity": "high" },
+            { "id": "CVE-2026-27138", "severity": "medium" },
+            { "id": "CVE-2026-27139", "severity": "low" },
+            { "id": "CVE-2026-27142", "severity": "medium" }
+          ],
+          "subjects": [ { "kind": "dependency", "name": "go 1.26.1", "name_full": "Go 1.26.1", "role": "changed" } ],
+          "window": { "introduced_in": "v1.14.2" },
+          "quote": "In addition, the release updates the build to Go 1.26.1, which include security fixes addressing CVE-2026-27137, CVE-2026-27138, CVE-2026-27139, CVE-2026-25679, and CVE-2026-27142.",
+          "disclosure": "described",
+          "source_url": "https://github.com/coredns/coredns/releases/tag/v1.14.2",
+          "release_url": "https://ratatosk.io/en/releases/coredns/v1.14.2",
+          "seq": 3431
+        },
+        …3 件省略…
+      ]
+    }
+  ],
+  "privacy": "versions were compared locally; only project slugs were sent to the server"
+}
+```
+
+同じ変更でも 2 つのモードで深刻度が違う点に注目してください。`brief` は
+`severity` を 1 つ（グループの最大値である `high`）返し、`full` は
+アドバイザリ 5 件をそれぞれの深刻度とともに返します。`full` は
+`severity_min` か `target_version` で絞って使ってください。忙しい
+プロジェクトに絞り込みなしで当てると、レスポンスは大きくなります。
 
 ### 質問例
 
-> 「うちは envoy v1.36.8 なんだけど、v1.37.0 に上げる前に対応することは
-> ある？」
+> 「うちの envoy は v1.36.8 ですが、v1.37.0 に上げる前に対処すべきことは
+> ありますか？」
 
-> 「うちのスタックは Kubernetes 1.31、Cilium 1.16、CoreDNS 1.11 なんだけど、
-> アップグレード前に見ておくべきことはある？」
+> 「うちのスタックは Kubernetes 1.31、Cilium 1.16、CoreDNS 1.11 です。
+> アップグレード前に見ておくべきことはありますか？」
 
-どちらの質問もエージェントは `check_stack` 1 回で答えます。前者は
-`target_version` を指定した形に、後者はコンポーネント 3 つを 1 回の
-呼び出しにまとめた形になります。クラスタを直接読めるエージェントなら、
-上のシナリオの 2 つの文言のように、バージョンの調査ごと任せることも
-できます。
+エージェントはどちらも `check_stack` 1 回で答えます。前者は
+`target_version` を埋めて、後者はコンポーネント 3 つを 1 回の呼び出しに
+まとめて。上のシナリオのようにクラスタを直接読めるエージェントなら、
+バージョンを集める作業そのものも任せられます。
 
 ## list_projects
 
-追跡中のすべてのプロジェクトの一覧です。引数がなくレスポンスも小さいので、
-プロジェクト名からスラッグを推測する代わりに、まずこのツールを呼ぶのが
-定石です — 間違ったスラッグはエラーにならず `check_stack` の
-`tracked:false` として現れるため、推測は静かに「カバレッジなし」に
-つながります。ほかの 5 つのツールが受け取る `project` 引数の正式な値が、
-このレスポンスの `slug` です。
+追跡しているプロジェクトの全名簿です。引数がなくレスポンスも小さいので、
+プロジェクト名からスラグを推測する前にこれを呼んでください。誤ったスラグは
+エラーにならず、`check_stack` で `tracked:false` として返ります。つまり
+推測ひとつが静かに「カバレッジなし」に変わります。ここの `slug` が、他の
+すべてのツールが受け取る `project` 引数の正典です。
 
 ### パラメータ
 
-ありません。空の引数で呼び出します。
+ありません。空の引数で呼んでください。
 
 ### 呼び出し例
 
@@ -388,17 +539,22 @@ libnetwork プラグイン削除、proxylib/Kafka ポリシー削除）を確認
 ```json
 {
   "projects": [
-    { "slug": "argo", "name": "Argo", "tier": "graduated", "category": "cicd", "analyzed_releases": 25 },
+    { "slug": "argo", "name": "Argo", "tier": "graduated", "category": "cicd", "analyzed_releases": 32 },
     …
+    { "slug": "cilium", "name": "Cilium", "tier": "graduated", "category": "networking",
+      "analyzed_releases": 21, "cluster_core": true },
+    { "slug": "containerd", "name": "containerd", "tier": "graduated", "category": "kubernetes-core",
+      "analyzed_releases": 22, "cluster_core": true,
+      "visibility": "observed via node status (nodeInfo.containerRuntimeVersion), never via pods — a workload listing cannot show the runtime" },
     { "slug": "coredns", "name": "CoreDNS", "tier": "graduated", "category": "kubernetes-core",
-      "analyzed_releases": 5, "cluster_core": true },
+      "analyzed_releases": 7, "cluster_core": true },
     { "slug": "envoy", "name": "Envoy", "tier": "graduated", "category": "networking",
-      "analyzed_releases": 22, "image_aliases": [ "cilium-envoy" ], "cluster_core": true },
+      "analyzed_releases": 23, "image_aliases": [ "cilium-envoy" ], "cluster_core": true },
     { "slug": "etcd", "name": "etcd", "tier": "graduated", "category": "kubernetes-core",
-      "analyzed_releases": 18, "cluster_core": true,
+      "analyzed_releases": 21, "cluster_core": true,
       "visibility": "may live outside the k8s API, be hidden by a managed control plane, or be replaced entirely — a missing pod is not a missing component; when unreadable, report it under Could not check instead of guessing a version" },
     { "slug": "kubernetes", "name": "Kubernetes", "tier": "graduated", "category": "kubernetes-core",
-      "analyzed_releases": 22, "cluster_core": true,
+      "analyzed_releases": 26, "cluster_core": true,
       "image_aliases": [ "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "kube-proxy" ] },
     …
   ],
@@ -406,52 +562,48 @@ libnetwork プラグイン削除、proxylib/Kafka ポリシー削除）を確認
 }
 ```
 
-基本フィールド（`slug`・`name`・`tier`・`category`・`analyzed_releases`）の
-ほかに、3 つの印が付く項目があります：
+基本フィールド（`slug`、`name`、`tier`、`category`、`analyzed_releases`）の
+ほかに、一部の項目には 3 つのマーカーが付きます。
 
-- `image_aliases` — そのプロジェクトがクラスタで別名で動いている場合の
-  名前。この別名に一致するイメージやワークロードは、そのプロジェクトが
-  タグの示すバージョンで動いているものとして扱えます。
-- `cluster_core:true` — クラスタの基盤レイヤー（コントロールプレーン、
-  データストア、DNS、ランタイム、CNI/データプレーン）。クラスタに存在する
-  `cluster_core` プロジェクトはすべて `check_stack` 呼び出しに含める
-  候補です。
-- `visibility` — そのコンポーネントをどう観測するか、そして読み取れなくても
-  異常ではない箇所を示すヒント（たとえば etcd は k8s API の外に
-  あることがあります）。読めなかったコンポーネントは、バージョンを推測する
-  代わりに「確認できなかった」と報告してください、という案内です。
+- `image_aliases` — そのプロジェクトがクラスタ内で名乗る別名。別名に合致する
+  イメージやワークロードはそのプロジェクトであり、バージョンはタグが示す
+  ものです。
+- `cluster_core:true` — クラスタの土台（コントロールプレーン、データストア、
+  DNS、ランタイム、CNI・データプレーン）。クラスタに存在する
+  `cluster_core` プロジェクトはすべて `check_stack` 呼び出しの候補です。
+- `visibility` — そのコンポーネントをどう観測するか、そしてどこでなら読めなくても
+  正常かのヒント。containerd はポッド一覧ではなくノードの状態から読めと言い、
+  etcd はそもそも k8s API の外にあり得ると警告します。読めないコンポーネントは
+  推測せず「確認できず」として報告すべきです。
 
 ### 質問例
 
-> 「うちのスタックは Kubernetes 1.31、Cilium 1.16、CoreDNS 1.11 なんだけど、
-> アップグレード前に見ておくべきことはある？」
+> 「うちのスタックは Kubernetes 1.31、Cilium 1.16、CoreDNS 1.11 です。
+> アップグレード前に見ておくべきことはありますか？」
 
-`check_stack` と同じ質問です — 上のシナリオで見たとおり、エージェントは
-スラッグを確定するためにまずこのツールを呼び、それから `check_stack` に
-進みます。
+`check_stack` と同じ質問です。上のシナリオで見たとおり、エージェントは
+まずこのツールでスラグを確定してから `check_stack` へ進みます。
 
 ## list_releases
 
-1 プロジェクトの最新リリース N 件を、1 行サマリー（バージョン、日付、
-カバレッジ、深刻度別の fact 数、そしてアドバイザリグループの最高深刻度
-`max_group_severity` — グループに属する fact がなければ `null`）で
-新しい順に返します。「X で最近何があった？」という質問専用のツールです。
-同じ fact データを扱う `list_facts` とは並び順が逆です。`list_facts` は
-ローカルコピーの同期のために分析の古い順に流れるフィードで、最新の話題を
-聞くときはこのツールを使ってください。サマリーで目に留まったリリースが
-あれば `get_release` で掘り下げます。
+1 つのプロジェクトの最新 N 件のリリースを、軽いサマリとして新しい順に
+返します。「最近 X に何があった？」に答えるツールです。`list_changes` と
+対比してください。あちらは同じデータを逆順に — 分析の古いものから —
+流す同期フィードで、ローカルの写しを最新に保つためのものです。「最近の
+できごと」を問う質問はこちらです。気になる行があれば `get_release` で
+深掘りしてください。
 
 ### パラメータ
 
-| パラメータ | 必須 | 型 | デフォルト | 説明 |
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
 |---|---|---|---|---|
-| `project` | はい | string | — | プロジェクトスラッグ（例：`istio`） |
-| `limit` | いいえ | integer | `5` | 最近のリリースを何件見るか。最大 `20` |
+| `project` | はい | string | — | プロジェクトスラグ（例：`istio`） |
+| `limit` | いいえ | integer | `5` | 最近のリリースを何件。最大 `20` |
 
 ### 呼び出し例
 
 ```json
-{ "project": "cilium", "limit": 3 }
+{ "project": "cilium", "limit": 5 }
 ```
 
 ### 実測レスポンス（一部省略）
@@ -459,275 +611,421 @@ libnetwork プラグイン削除、proxylib/Kafka ポリシー削除）を確認
 ```json
 {
   "project": "cilium",
-  "count": 3,
+  "count": 5,
   "releases": [
     {
       "version": "v1.20.0", "version_rank": [ 1, 20, 0 ],
-      "released_at": "2026-07-29T15:00:29.000Z", "reviewed_at": "2026-07-29T15:49:54.048Z",
-      "coverage": "full_reviewed",
-      "facts_total": 22, "facts_mandatory": 17,
-      "facts_by_severity": { "high": 3, "medium": 11, "low": 8 },
-      "max_group_severity": null,
+      "released_at": "2026-07-29T15:00:29.000Z", "reviewed_at": "2026-08-09T04:33:14.949Z",
+      "changes_total": 45,
+      "by_bucket": { "action": 9, "check": 30, "plan": 6 },
+      "by_family": { "breaking": 32, "security": 7, "deprecated": 6 },
+      "max_severity": null,
+      "notes_total": 478,
       "api_url": "https://ratatosk.io/v1/releases/cilium/v1.20.0",
-      "release_url": "https://ratatosk.io/releases/cilium/v1.20.0"
+      "release_url": "https://ratatosk.io/en/releases/cilium/v1.20.0"
     },
     {
-      "version": "v1.19.6", …, "facts_total": 2, "facts_mandatory": 2,
-      "facts_by_severity": { "high": 1, "medium": 1 }, …
+      "version": "v1.19.6", "released_at": "2026-07-16T22:52:21.000Z",
+      "changes_total": 1, "by_bucket": { "check": 1 }, "by_family": { "breaking": 1 },
+      "max_severity": null, "notes_total": 46, …
     },
     {
-      "version": "v1.18.12", …, "coverage": "full_reviewed",
-      "facts_total": 0, "facts_mandatory": 0, "facts_by_severity": {}, …
-    }
+      "version": "v1.18.12", "released_at": "2026-07-16T22:47:50.000Z",
+      "changes_total": 0, "by_bucket": {}, "by_family": {},
+      "max_severity": null, "notes_total": 20, …
+    },
+    { "version": "v1.17.18", "changes_total": 0, "notes_total": 10, … },
+    { "version": "v1.19.5", "changes_total": 3, "by_bucket": { "check": 3 },
+      "by_family": { "breaking": 2, "security": 1 }, "notes_total": 48, … }
   ],
-  "hint": "summaries only — fetch /v1/releases/{project}/{version} for a release's full facts"
+  "hint": "summaries only — fetch /v1/releases/{project}/{version} for a release's full changes"
 }
 ```
 
-`v1.18.12` のように `facts_total` が 0 で `coverage` が `full_reviewed` の
-行は、「ノートを最後まで読み、特記事項のないリリースだった」という
-意味です — データがないことと区別できる、確認済みの「異常なし」です。
+読むときの注意が 3 つあります。
+
+- **`changes_total: 0`** — v1.18.12 と v1.17.18 がそうです — は、ノートを
+  最後まで読み、そのリリースが日常的だったという意味です。データがないのとは
+  異なる、監査可能な沈黙です。`notes_total` はノートが空でなかったことを
+  示します。それぞれ日常的な記録が 20 行と 10 行ありました。
+- **`max_severity` はそのリリースの最高 *アドバイザリ* 深刻度** であり、
+  どの変更もアドバイザリを引用していなければ `null` です。v1.20.0 は
+  `security` ファミリーの変更が 7 件あるのに `null` ですが、これは CVE の
+  付かない依存関係更新だからです。ここでの `null` は「深刻なものがない」では
+  なく「アドバイザリ id がない」という意味です。
+- **大きなリリースでは `notes_total` が `changes_total` を圧倒します** —
+  v1.20.0 では 45 に対して 478。その差が、1 件ずつ表に出さないと決めた
+  日常的な記録です。
 
 ### 質問例
 
-> 「Cilium で最近何があった？」
+> 「最近 Cilium に何がありましたか？」
 
-エージェントが `list_releases(project: "cilium")` を呼び、上のサマリーを
-根拠に、fact が v1.20.0 に集中していると答えます。
+エージェントは `list_releases(project: "cilium")` を呼び、サマリだけで
+答えます。変更が v1.20.0 に集中していること、そして静かな 2 件のリリースは
+飛ばしたのではなく読んだ結果であることまで含めて。
 
 ## get_release
 
-レビュー済みリリース 1 件の全体です。概要部分（カバレッジ、総合評価、
-原文ノートへのリンク）と、そのリリースのすべての fact が返ります。
-`check_stack` や `list_releases` で目に留まったリリース 1 件を根拠まで
-掘り下げるとき、そして fact の原文（`source_url`）にあたって判断を
-検証するときに使うツールです。`version` を省略するとそのプロジェクトの
-最新レビュー済みリリースが返るので、「X の最新リリースはどう？」という
-質問にもこのツールを使います。プライバシーについて 1 点：`check_stack` と
-違い、このツールはバージョンを引数に取り、そのバージョンは
-アップストリームへのリクエストパスに載ります —
-[README の「実行中のコンポーネントバージョンの取り扱い」](../README.ja.md#実行中のコンポーネントバージョンの取り扱い)を
-見てください。
+1 つのリリースの全体です。エンベロープ（要約、原文 URL、リリース URL、
+集計）と、そのリリースのすべての変更が一緒に返ります。`check_stack` や
+`list_releases` が浮かび上がらせたリリースを深掘りするとき、そして
+`source_url` で原文に照らして判断を検証するときのツールです。`version` を
+省略するとそのプロジェクトの最新リリースが返るので、「X の最新リリースは
+どんな感じ？」もここに来ます。
 
 ### パラメータ
 
-| パラメータ | 必須 | 型 | デフォルト | 説明 |
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
 |---|---|---|---|---|
-| `project` | はい | string | — | プロジェクトスラッグ（例：`envoy`） |
-| `version` | いいえ | string | *（なし＝最新レビュー済みリリース）* | 公開されたとおりのリリースタグ（例：`v1.38.3`）。先頭の `v` はあってもなくても受け付けます — プロジェクトごとに表記が違うためです。存在しないタグを渡すと、そのプロジェクトの最近のレビュー済みタグ一覧を含むエラーが返るので、その中のどれかで呼び直してください |
-| `include_raw` | いいえ | boolean | `false` | 原文リリースノート本文を `raw_notes` として一緒に受け取ります — 抽出された fact ではなく原文で判断したいときに使います。レビューがリリース全体をカバーできていない場合（カバレッジ `insufficient`、または fact 0 件）には自動的に含まれます |
+| `project` | はい | string | — | プロジェクトスラグ（例：`envoy`） |
+| `version` | いいえ | string | *(なし = 最新リリース)* | 公開されたままのリリースタグ（例：`v1.38.3`）。先頭の `v` はあってもなくても構いません — プロジェクトごとに表記が違うためです |
+| `include_raw` | いいえ | boolean | `false` | リリースノートの原文を `raw_notes` として併せて返す（上限あり。切られた場合は `raw_notes_truncated: true`） |
+
+誤ったタグは、そのプロジェクトの最近のタグを教える `404` になるので、
+呼び出した側が 1 回の再試行で自力で直せます：
+
+```
+/v1/releases/cilium/v9.9.9: HTTP 404: {"error":"no reviewed release 'v9.9.9' for
+project 'cilium'. Recent reviewed versions: v1.20.0, v1.19.6, v1.18.12, v1.17.18,
+v1.19.5 — retry with one of these exact tags."}
+```
 
 ### 呼び出し例
 
-バージョンを省略して最新レビュー済みリリースを受け取る呼び出しです：
-
 ```json
-{ "project": "istio" }
+{ "project": "envoy", "version": "v1.38.3" }
 ```
 
 ### 実測レスポンス（一部省略）
 
 ```json
 {
-  "project": "istio",
-  "version": "1.29.6",
-  "released_at": "2026-07-16T16:51:06.000Z",
-  "reviewed_at": "2026-07-16T17:27:06.386Z",
-  "source_url": "https://github.com/istio/istio/releases/tag/1.29.6",
-  "coverage": "full_reviewed",
-  "assessment": "Routine patch release focused on bug fixes for ambient mesh components (pilot-agent drain logic, WorkloadEntry HBONE capability propagation, ztunnel CNI deadlock, Istiod memory leak, and east-west gateway RBAC filtering); no new breaking changes, API changes, or CVEs, though one fix has an operator-visible transitional caveat for auto-registered WorkloadEntry resources.",
-  "release_url": "https://ratatosk.io/releases/istio/1.29.6",
-  "facts": [
+  "project": "envoy",
+  "version": "v1.38.3",
+  "version_rank": [ 1, 38, 3 ],
+  "released_at": "2026-06-23T23:28:25.000Z",
+  "reviewed_at": "2026-08-09T04:33:14.780Z",
+  "summary": "Envoy v1.38.3 is a maintenance release with multiple disclosed security fixes and a security-related dependency update. It also disables a broken extension and changes the default for TLS certificate compression, so the release concerns deployments using those features.",
+  "source_url": "https://github.com/envoyproxy/envoy/releases/tag/v1.38.3",
+  "release_url": "https://ratatosk.io/en/releases/envoy/v1.38.3",
+  "by_bucket": { "action": 1, "check": 17 },
+  "by_family": { "security": 16, "breaking": 2 },
+  "max_severity": "high",
+  "notes_total": 0,
+  "changes": [
     {
-      "fact_id": 490,
-      "fact_type": "behavior_changed",
-      "severity": "medium",
-      "mandatory": true,
-      "confidence": 0.85,
-      "applies_if": {
-        "status": "degraded",
-        "fallback": "workloads auto-registered before upgrading continue to be reached over plaintext until they either re-register or the networking.istio.io/tunnel=http label is added to their existing WorkloadEntry"
-      },
-      "affected": { "fixed_in": "1.29.6", "removed_in": null, "deprecated_in": null },
-      "entities": [ { "kind": "config_field", "name": "networking.istio.io/tunnel", … } ],
-      "references": {
-        "ids": [],
-        "quote": "workloads auto-registered before upgrading continue to be reached over plaintext until …"
-      },
-      …
+      "change_id": "envoy:v1.38.3:54ea382c",
+      "matter_key": "envoy/advisory:cve-2026-47261",
+      "project": "envoy", "version": "v1.38.3", "version_rank": [ 1, 38, 3 ],
+      "released_at": "2026-06-23T23:28:25.000Z",
+      "family": "security", "actionability": "act", "bucket": "action",
+      "kind": "value_changed",
+      "applies_if": { "evaluable": false, "mode": "universal", "clauses": [], "raw": null },
+      "advisories": [ { "id": "CVE-2026-47261", "severity": "high" } ],
+      "subjects": [
+        { "kind": "dependency", "name": "com_github_wasmtime", "name_full": "com_github_wasmtime", "role": "changed" },
+        { "kind": "cve", "name": "cve-2026-47261", "name_full": "CVE-2026-47261", "role": "changed" }
+      ],
+      "window": null,
+      "transition": null,
+      "remedy": null,
+      "symptom": [],
+      "quote": "wasm: bumped ``com_github_wasmtime`` to resolve CVE-2026-47261.",
+      "disclosure": "described",
+      "source_url": "https://github.com/envoyproxy/envoy/releases/tag/v1.38.3",
+      "release_url": "https://ratatosk.io/en/releases/envoy/v1.38.3",
+      "seq": 13911
+    },
+    …17 件省略…
+  ]
+}
+```
+
+変更 18 件に対して `by_bucket` が 1 / 17 というのが、セキュリティ
+ポイントリリースの典型的な形です。全員が取り込むべきものが 1 つ、どの拡張を
+使っているかに依存するものが 17 つ。
+
+### 監査可能な沈黙は、自ら根拠を携えてきます
+
+運用者が対処すべき変更がないリリースでは、`get_release` は頼まれなくても
+`raw_notes` を一緒に返します。沈黙を信じてくださいと言う代わりに、原文から
+直接判断できるようにするためです。
+
+```json
+{
+  "project": "cilium",
+  "version": "v1.18.12",
+  "summary": "Cilium v1.18.12 adds Gateway access-log configuration and BYOCNI loopback support. It also fixes policy, startup, Gateway validation, IPAM, and metric-label defects, while updating shipped images and dependencies; no security advisories or security-specific flaws are disclosed.",
+  "by_bucket": {}, "by_family": {}, "max_severity": null,
+  "notes_total": 20,
+  "changes": [],
+  "raw_notes": "# 1.18.12\n\nSummary of Changes\n------------------\n\n**Minor Changes:**\n* gateway-api: add support for configuring Gateway access logs …",
+  "raw_notes_truncated": false
+}
+```
+
+### 質問例
+
+> 「Istio の最新リリースはどうですか？ 何が見つかりました？」
+
+エージェントは `version` なしで `get_release(project: "istio")` を呼び、
+`summary` とバケットの集計から答えます。
+
+## changes_by_entity
+
+逆引きインデックスです。識別子 1 つ — CVE id、CRD、フィーチャーゲート、
+フラグ、メトリクス、設定フィールド、依存関係 — に触れるすべての変更を、
+プロジェクトとリリースをまたいで集めてきます。大文字小文字は区別しません。
+マニフェストやアドバイザリから識別子を 1 つ手にして、その周辺に何が
+あったかを知りたいときに使ってください。プロジェクトから出発する
+`get_release`・`list_releases` とは逆方向です。
+
+### パラメータ
+
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
+|---|---|---|---|---|
+| `name` | はい | string | — | 探す正確な識別子：CVE id、CRD、フィーチャーゲート、フラグ、メトリクス、設定フィールド、拡張、サブシステム、依存関係 |
+| `kind` | いいえ | string | *(なし = すべて)* | 識別子の種類を 1 つに限定：`api`、`crd`、`feature_gate`、`flag`、`metric`、`config_field`、`extension`、`dependency`、`cve`、`advisory`、`subsystem` |
+
+インデックスは変更が持つ `subjects` から作られます。突き合わせは保存された
+`name` への完全一致（大文字小文字は無視）であり、部分文字列検索ではありません。
+返るのは最大 200 件です。
+
+`{ "changes": [] }` は、その識別子を名前に持つ変更が記録にないという意味で
+あって、その周辺に何も起きていないという意味ではありません。結論を出す前に
+範囲を広げてください。まず `kind` を外します — 対象に保存された種類と完全に
+一致する必要があり、1 つの識別子が必ずしも想像どおりの種類で分類されているとは
+限らないからです。次に、その変更が索引されていそうな別の識別子で試します。
+GHSA id だけで引用されたアドバイザリは CVE id では届きませんし、その逆も
+同じです。
+
+### 呼び出し例
+
+```json
+{ "name": "CVE-2026-41178" }
+```
+
+### 実測レスポンス
+
+```json
+{
+  "changes": [
+    {
+      "change_id": "buildpacks:v0.40.9:83576398",
+      "matter_key": "buildpacks/advisory:cve-2026-41178",
+      "project": "buildpacks", "version": "v0.40.9", "version_rank": [ 0, 40, 9 ],
+      "released_at": "2026-08-09T17:12:10.000Z",
+      "family": "security", "actionability": "act", "bucket": "action",
+      "kind": "value_changed",
+      "applies_if": { "evaluable": false, "mode": "universal", "clauses": [], "raw": null },
+      "advisories": [
+        { "id": "CVE-2026-41178", "severity": "medium" },
+        { "id": "GO-2026-5158", "severity": "medium" }
+      ],
+      "subjects": [
+        { "kind": "dependency", "name": "go.opentelemetry.io/otel", "name_full": "go.opentelemetry.io/otel", "role": "changed" },
+        { "kind": "cve", "name": "cve-2026-41178", "name_full": "CVE-2026-41178", "role": "changed" },
+        { "kind": "advisory", "name": "go-2026-5158", "name_full": "GO-2026-5158", "role": "changed" }
+      ],
+      "window": { "introduced_in": "v0.40.9" },
+      "quote": "`go.opentelemetry.io/otel` | v1.43.0 → v1.44.0 | GO-2026-5158 / CVE-2026-41178 — baggage header not length-capped",
+      "disclosure": "described",
+      "source_url": "https://github.com/buildpacks/pack/releases/tag/v0.40.9",
+      "release_url": "https://ratatosk.io/en/releases/buildpacks/v0.40.9",
+      "seq": 18932
     }
   ]
 }
 ```
 
-まず概要部分を読みます。`coverage: "full_reviewed"` はノートを全部読んだ
-という意味で、`assessment` はリリース全体への 1 段落の評価です。
-カバレッジが `full_reviewed` なのに `facts` が空配列なら、読んだうえで
-特記事項がなかったという意味です。重大な決定を下す前に、`source_url` の
-原文で検証してください。
+この変更 1 件に索引された対象が 3 つ — 依存関係、CVE、Go のアドバイザリ —
+あるので、同じ項目に `go.opentelemetry.io/otel` でも、`CVE-2026-41178` でも、
+`GO-2026-5158` でも届きます。`window.introduced_in` は修正が v0.40.9 に
+入ったと告げており、それが到達しているべきバージョンです。
 
 ### 質問例
 
-> 「Istio の最新リリース、レビュー結果はどうだった？」
+> 「CVE-2026-41178 はどのリリースで直り、うちが使っているものに関係あり
+> ますか？」
 
-エージェントが `get_release(project: "istio")` を呼び、上の `assessment` を
-根拠に要約して答えます。
+エージェントは `changes_by_entity(name: "CVE-2026-41178")` を呼び、
+プロジェクトごとの `window.introduced_in` を読んで実行中のバージョンと
+比べます。セキュリティの確認なら、CVE id とアドバイザリ id の両方で
+問い合わせてください。ノートが片方しか引用していない変更は、その片方でしか
+索引されません。
 
-## facts_by_entity
+## get_matter
 
-逆引きインデックスです。正確な識別子 1 つ（CVE id、CRD、フィーチャー
-ゲート、フラグ、メトリック、設定フィールド、依存関係）を扱ったすべての
-fact を、プロジェクトとリリースを横断して集めます。大文字小文字は
-区別しません。マニフェストやセキュリティアドバイザリで得た識別子を 1 つ
-手がかりに「この周りで何があった？」と聞くときのツールです。
-プロジェクトから出発する `get_release`・`list_releases` とは向きが逆です。
+1 つの案件が現れたすべてのリリースを、古い順に返します。`matter_key` は
+変更からそのままコピーして渡してください。大文字小文字を区別し、`/` と `:`
+を含みます。「*自分の* ブランチではどのバージョンがこれを直すのか」
+「もう対処済みか」に答えるツールです。
+
+最新のものだけでなくすべての出現を返す理由はこうです。メンテナが 1 つの問題を
+サポート中の 5 ブランチで直すと変更は 5 件生まれますが、ブランチごとに載る
+アドバイザリの組が同じとは限りません。最新のものだけを聞いて判断すると、
+古いブランチにいる人は自分のカバレッジを取り違えます。
 
 ### パラメータ
 
-| パラメータ | 必須 | 型 | デフォルト | 説明 |
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
 |---|---|---|---|---|
-| `name` | はい | string | — | 調べる正確な識別子：CVE id、CRD、フィーチャーゲート、フラグ、メトリック、設定フィールド、依存関係 |
-| `kind` | いいえ | string | *（なし＝全種類）* | 識別子の種類で限定：`api`・`crd`・`feature_gate`・`flag`・`metric`・`config_field`・`extension`・`dependency`・`cve`・`advisory`・`subsystem` |
+| `matter_key` | はい | string | — | 変更からそのままコピーした `matter_key` |
+| `include_all` | いいえ | boolean | `false` | 日常的な記録（大半はボットの依存関係更新）も含める |
 
 ### 呼び出し例
 
 ```json
-{ "name": "CVE-2026-47778" }
+{ "matter_key": "containerd/advisory:cve-2026-47262" }
 ```
 
 ### 実測レスポンス（一部省略）
 
-8 件返ってきました — envoy のリリースブランチ 5 つと、同じ CVE を自らの
-リリースノートで扱った istio の 3 件です：
-
 ```json
 {
-  "facts": [
+  "matter_key": "containerd/advisory:cve-2026-47262",
+  "project": "containerd",
+  "family": "security",
+  "occurrences": [
     {
-      "fact_id": 211, "project": "envoy", "version": "v1.36.9",
-      "fact_type": "security_fix", "severity": "critical", "mandatory": true,
-      "advisory_group_key": "adv:ghsa-f8x4-rw5x-f3r7", "group_severity": "critical",
-      "affected": { "fixed_in": "v1.36.9", … },
-      "references": {
-        "ids": [ "CVE-2026-47778", "GHSA-f8x4-rw5x-f3r7" ],
-        "quote": "Embedded NUL in TLS SAN Truncation, Auth Bypass"
-      },
-      "source_url": "https://github.com/envoyproxy/envoy/releases/tag/v1.36.9", …
+      "change_id": "containerd:v2.2.5:a74c2b48",
+      "version": "v2.2.5", "version_rank": [ 2, 2, 5 ],
+      "released_at": "2026-06-18T23:11:33.000Z",
+      "family": "security", "actionability": "act", "bucket": "action",
+      "kind": "defect_corrected",
+      "advisories": [
+        { "id": "CVE-2026-47262", "severity": "medium" },
+        { "id": "CVE-2026-50195", "severity": "medium" },
+        { "id": "CVE-2026-53488", "severity": "critical" },
+        { "id": "CVE-2026-53489", "severity": "high" },
+        { "id": "CVE-2026-53492", "severity": "high" },
+        { "id": "GHSA-33vj-92qq-66hc", "severity": "high" },
+        …ほか 4 件…
+      ],
+      "source_url": "https://github.com/containerd/containerd/releases/tag/v2.2.5", …
     },
-    {
-      "fact_id": 239, "project": "istio", "version": "1.28.9",
-      "fact_type": "security_fix", "severity": "medium", "mandatory": true,
-      "advisory_group_key": "adv:istio-security-2026-005", "group_severity": "high",
-      "affected": { "fixed_in": "1.28.9", … },
-      "references": {
-        "ids": [ "CVE-2026-47778", "ISTIO-SECURITY-2026-005" ],
-        "quote": "Envoy could fail to validate the Subject Alternative Name (SAN) of a peer certificate if the SAN contained an embedded NUL byte"
-      },
-      "source_url": "https://github.com/istio/istio/releases/tag/1.28.9", …
-    },
-    { "fact_id": 268, "project": "envoy", "version": "v1.35.13", "severity": "critical", … },
-    { "fact_id": 285, "project": "envoy", "version": "v1.38.3", "severity": "critical", … },
-    { "fact_id": 328, "project": "istio", "version": "1.30.2", "severity": "low",
-      "advisory_group_key": "adv:istio-security-2026-005", "group_severity": "high", … },
-    …3 件省略…
-  ]
+    { "version": "v2.3.2",  "advisories": [ …id 10 件… ], … },
+    { "version": "v2.0.10", "advisories": [ "CVE-2026-47262", "CVE-2026-53488", "GHSA-jpcc-p29g-p8mq", "GHSA-xhf5-7wjv-pqxp" ], … },
+    { "version": "v1.7.33", "advisories": [ …id 4 件… ], … },
+    { "version": "v2.1.9",  "advisories": [ "CVE-2026-47262", "GHSA-jpcc-p29g-p8mq" ], … }
+  ],
+  "includes_notes": false
 }
 ```
 
-読み方を 1 つ：fact には深刻度が二重に付いています。`severity` はその
-リリースノートに記載されていた深刻度、`group_severity` は同じアドバイザリ
-グループ（`advisory_group_key`）全体の最大深刻度です。緊急度の判断は
-`group_severity` で行ってください — 上の istio 1.30.2 の fact は
-`severity` こそ `low` ですが、グループとしては `high` です。
+このツールが存在する理由がまさにこのケースです。containerd のロールアップ
+1 つが 5 つのブランチに降り、ブランチごとに載るアドバイザリ id が
+**10 件、10 件、4 件、4 件、2 件** です。v2.1.x にいる人が v2.2.5 の項目だけを
+読むと、自分のブランチが受け取ってもいない修正 8 件を受け取ったと思い込みます。
+`occurrences` は古い順なので、`version` がいま動かしているものの直上にある
+項目が、上げるべき先です。
+
+`includes_notes` は日常的な記録を含めたかどうかを返すので、末尾が空なのか
+外したのかを区別できます。
 
 ### 質問例
 
-> 「CVE-2026-47778 はどのリリースで修正された？うちの envoy にも影響する？」
+> 「うちは containerd 2.1.8 ですが、あの containerd の CVE ロールアップは
+> うちでは直っていますか？ どのリリースで？」
 
-エージェントが `facts_by_entity(name: "CVE-2026-47778")` を呼び、
-ブランチごとの `fixed_in`（envoy
-v1.35.13・v1.36.9・v1.37.5・v1.38.3・v1.39.0）を根拠に答えます。
-セキュリティの確認は、CVE id とアドバイザリ id（GHSA）の両方で
-調べてください。ノートがどちらか一方しか引用していない fact は、その
-識別子でしか引けません。
+エージェントは、その案件を浮かび上がらせたツール — `check_stack` でも
+`changes_by_entity` でも — から `matter_key` を取って `get_matter` を呼び、
+最新の項目ではなく 2.1 ブランチの項目から答えます。
 
-## list_facts
+## list_changes
 
-fact の増分同期フィードです。`fact_id` の昇順、つまり分析の古い順に
-流れるため、最初のページが最新データではありません。レスポンスの
-`next_since` を次の呼び出しの `since` に渡してページを送り、ローカル
-コピーを最新に保つためのツールです。「X の最新リリース」のような質問には、このツール
-ではなく `list_releases` や `get_release` を使ってください。プロジェクト・
-タイプ・深刻度のフィルタでフィードを絞れます。
+増分同期フィードです。`seq` の昇順 — 分析の古いものから — で流れるため、
+最初のページは最新のデータでは **ありません**。ローカルの写しを最新に保つ
+ためにあるツールです。「X の最新リリースは？」や「X の最近のリリース」には
+`list_releases` か `get_release` を使ってください。
+
+日常的な記録は除かれます。このフィードには運用者が対処すべき変更だけが
+流れます。
 
 ### パラメータ
 
-| パラメータ | 必須 | 型 | デフォルト | 説明 |
+| パラメータ | 必須 | 型 | 既定値 | 説明 |
 |---|---|---|---|---|
-| `project` | いいえ | string | *（なし＝全部）* | プロジェクトスラッグのフィルタ（例：`envoy`） |
-| `type` | いいえ | string | *（なし＝全部）* | fact タイプのフィルタ：`security_fix`・`dependency_bump`・`capability_removed`・`capability_deprecated`・`api_version_changed`・`identifier_renamed`・`validation_tightened`・`default_changed`・`behavior_changed` |
-| `severity` | いいえ | string | *（なし＝全部）* | 深刻度のフィルタ：`info`・`low`・`medium`・`high`・`critical`（ちょうどその深刻度のみ） |
-| `since` | いいえ | integer | *（なし＝最初から）* | カーソル：この値より大きい `fact_id` だけが返ります。前のレスポンスの `next_since` を入れてください |
+| `project` | いいえ | string | *(なし = すべて)* | プロジェクトスラグでの絞り込み（例：`envoy`） |
+| `family` | いいえ | string | *(なし = すべて)* | `security`、`breaking`、`deprecated` |
+| `bucket` | いいえ | string | *(なし = すべて)* | `action`、`check`、`plan` |
+| `since` | いいえ | integer | *(なし = 最初から)* | カーソル。`seq` がこの値より大きい変更のみ。直前のレスポンスの `next_since` を渡します |
 | `limit` | いいえ | integer | `50` | ページサイズ。最大 `200` |
 
 ### 呼び出し例
 
 ```json
-{ "type": "security_fix", "severity": "critical", "limit": 2 }
+{ "family": "security", "bucket": "action", "limit": 3 }
 ```
 
 ### 実測レスポンス（一部省略）
 
 ```json
 {
-  "facts": [
+  "changes": [
     {
-      "fact_id": 211, "project": "envoy", "version": "v1.36.9",
-      "released_at": "2026-06-23T20:22:33.000Z",
-      "fact_type": "security_fix", "severity": "critical", "mandatory": true,
-      "advisory_group_key": "adv:ghsa-f8x4-rw5x-f3r7", "group_severity": "critical",
-      "affected": { "fixed_in": "v1.36.9", … },
-      "references": {
-        "ids": [ "CVE-2026-47778", "GHSA-f8x4-rw5x-f3r7" ],
-        "quote": "Embedded NUL in TLS SAN Truncation, Auth Bypass"
-      },
-      "source_url": "https://github.com/envoyproxy/envoy/releases/tag/v1.36.9", …
+      "change_id": "argo:v3.5.0:c140f331",
+      "matter_key": "argo/dependency/formidable#value_changed",
+      "project": "argo", "version": "v3.5.0", "version_rank": [ 3, 5, 0 ],
+      "released_at": "2026-08-04T08:35:57.000Z",
+      "family": "security", "actionability": "act", "bucket": "action",
+      "kind": "value_changed",
+      "applies_if": { "evaluable": false, "mode": "universal", "clauses": [], "raw": null },
+      "advisories": [],
+      "subjects": [ { "kind": "dependency", "name": "formidable", "name_full": "formidable", "role": "changed" } ],
+      "window": null, "transition": null, "remedy": null, "symptom": [],
+      "quote": "chore(deps): update dependency formidable to v2.1.3 [security]",
+      "disclosure": "undisclosed",
+      "source_url": "https://github.com/argoproj/argo-cd/releases/tag/v3.5.0",
+      "release_url": "https://ratatosk.io/en/releases/argo/v3.5.0",
+      "seq": 1415
     },
-    {
-      "fact_id": 215, "project": "envoy", "version": "v1.36.9",
-      "fact_type": "security_fix", "severity": "critical", "mandatory": true,
-      "advisory_group_key": "adv:ghsa-8phg-2h2q-jgxf", "group_severity": "critical",
-      "applies_if": { "status": "degraded", "fallback": "if you proxy HTTP/3 to HTTP/1 backends" },
-      "references": {
-        "ids": [ "CVE-2026-48743", "GHSA-8phg-2h2q-jgxf" ],
-        "quote": "HTTP/3 to HTTP/1 request smuggling via headers-only request with nonzero Content-Length"
-      }, …
-    }
+    { "change_id": "backstage:v1.50.0:22fe2851", "project": "backstage", "version": "v1.50.0",
+      "released_at": "2026-04-14T17:49:58.000Z", "family": "security", "bucket": "action",
+      "disclosure": "described", "seq": 1464, … },
+    { "change_id": "backstage:v1.50.0:fc3cb011", "project": "backstage", "version": "v1.50.0", "seq": 1465, … }
   ],
-  "next_since": 215
+  "next_since": 1465
 }
 ```
 
 次のページは
-`{ "type": "security_fix", "severity": "critical", "since": 215 }` です。
-`next_since` が `null` で返ってくるまで繰り返してください。`null` は、
-もう取得するものがないという意味です（`since=null` は送らないでください —
-`400` になります）。
+`{ "family": "security", "bucket": "action", "limit": 3, "since": 1465 }`
+です。`next_since` が `null` で返るまで繰り返してください。`null` は追いつい
+たという意味です。`since: null` は送らないでください — `400` になります。
+ページが短く返ってきたら、そこで巡回は終わりです。`next_since` はページが
+いっぱいだったときにだけ値を持ちます。
+
+`seq` は分析のカーソルであって時間軸ではない点に注意してください。上の最初の
+ページには 8 月の argo リリースと 4 月の backstage リリースが同居していますが、
+分析された順序がそうだったからです。時系列が必要なら `released_at` で並べ替えて
+ください。
+
+argo の項目の `disclosure: "undisclosed"` は、ノートがその更新をセキュリティ
+関連と示しただけで、アドバイザリを名指ししてはいないという意味です。
+`security` / `action` の変更なのに `advisories` が空なのはこのためです。
 
 ### 質問例
 
-> 「記録されている critical のセキュリティ修正をひととおり見せて。」
+> 「ratatosk のデータのローカルコピーを最新に保って。」
 
-エージェントが `list_facts(type: "security_fix", severity: "critical")` を
-呼び、フィードをページ単位で読んで整理します。
+エージェントは最後に見た `next_since` を保存しておいてそこから再開し、
+`next_since` が `null` になるまでページを歩きます。
 
 ## プライバシーとレート制限
 
-一行の要旨：`check_stack` のバージョン比較はサーバープロセスの中で
-行われるため、セルフホストすれば稼働中のバージョンはインフラを
-離れません。どこまでが境界か、ログをどう扱っているかは
+要約すると、`check_stack` のバージョン比較はサーバープロセスのなかで
+行われるので、自分でホストすれば実行中のバージョンはあなたのインフラから
+出ません。境界とログの扱いの全体像は
 [README の「実行中のコンポーネントバージョンの取り扱い」](../README.ja.md#実行中のコンポーネントバージョンの取り扱い)を
-見てください。アップストリーム公開 API の上限は IP あたり毎分 60
-リクエストで、ホスト版エンドポイントはこのバケットをほかの利用者と
-共有します。プロジェクトごとのポーリングの代わりに `check_stack` 1 回に
-まとめ、負荷の高い使い方ならセルフホストに切り替えてください。
+見てください。
+
+上流の公開 API は呼び出し元あたり毎分 60 回に制限され、ホスト版
+エンドポイントはその 1 枠を利用者どうしで分け合います。プロジェクトごとに
+ポーリングする代わりにスタックの質問を `check_stack` 1 回にまとめ、多用する
+なら自前ホストへ移ってください。
+
+このデータは公式リリースノートから AI が抽出したものです。重要な判断は、
+すべての変更が持つ `source_url` に照らして確認してください
+（[利用規約](https://ratatosk.io/terms)）。

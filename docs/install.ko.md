@@ -26,7 +26,7 @@
 | 쿠버네티스에서 자체 에이전트 운용 (프레임워크 무관, CI 잡, SDK 클라이언트) | Helm 차트 | [클러스터 내 단독 배포](#클러스터-내-단독-배포-helm) |
 | [kagent](https://kagent.dev) 사용 중 | `kagent.enabled=true` Helm 옵션 또는 매니페스트 | [kagent 연동](#kagent-연동) |
 
-네 방식 모두 같은 도구 6개로 같은 공개 데이터를 제공하며, 어느 모드든 계정도
+네 방식 모두 같은 도구 7개로 같은 공개 데이터를 제공하며, 어느 모드든 계정도
 API 키도 필요 없습니다. 차이는 셋입니다.
 
 - **`check_stack`에 넘긴 실행 중인 버전이 어디까지 가는가.** 설치형은 버전
@@ -476,7 +476,7 @@ ratatosk.io의 `GET /v1`을 열어 보세요. 인덱스가 스스로를 설명�
 
 ## 다음 단계
 
-- 도구 6개의 파라미터·예시 호출·실제 응답: [도구 레퍼런스](tools.ko.md)
+- 도구 7개의 파라미터·예시 호출·실제 응답: [도구 레퍼런스](tools.ko.md)
 - 한눈에 보는 도구 표: [README의 도구 표](../README.ko.md#도구)
 - 차트 값 전체와 kagent 토글: [차트 README](../charts/ratatosk-mcp/README.ko.md)
 - kagent 매니페스트와 예제 에이전트: [kagent 예제](../examples/kagent/README.ko.md)

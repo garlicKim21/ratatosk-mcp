@@ -28,7 +28,7 @@ own SDK agent.
 | Running your own agents in Kubernetes (any framework, CI jobs, SDK clients) | Helm chart | [In-cluster](#in-cluster-deployment-without-kagent-helm) |
 | Using [kagent](https://kagent.dev) | `kagent.enabled=true` Helm toggle, or plain manifests | [kagent integration](#kagent-integration) |
 
-All four modes serve the same public data through the same six tools, and no
+All four modes serve the same public data through the same seven tools, and no
 mode needs an account or an API key. Three things differ:
 
 - **How far the versions you pass to `check_stack` travel.** Self-hosted,
