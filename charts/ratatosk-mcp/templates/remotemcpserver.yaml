@@ -9,5 +9,5 @@ spec:
   url: "http://{{ include "ratatosk-mcp.fullname" . }}:{{ .Values.service.port }}/mcp"
   timeout: 30s
   sseReadTimeout: 5m0s
-  description: "Typed, quoted facts from CNCF release notes; check_stack compares running versions locally"
+  description: "Typed, quoted changes from CNCF release notes; check_stack compares running versions locally"
 {{- end }}

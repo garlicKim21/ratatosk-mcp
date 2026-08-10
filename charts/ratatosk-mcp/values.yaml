@@ -6,7 +6,7 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
-# Upstream facts API. Point at a mirror if you proxy egress.
+# Upstream changes API. Point at a mirror if you proxy egress.
 ratatoskUrl: https://ratatosk.io
 
 # Serve HTTP without per-session state: no Mcp-Session-Id round-trip, and the

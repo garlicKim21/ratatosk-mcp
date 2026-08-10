@@ -116,7 +116,7 @@ func TestCoverageNote(t *testing.T) {
 	if n := coverageNote("1.17.18", version.NormalizeVersion("1.17.18"), oldest, oldestTag); n != "" {
 		t.Errorf("the earliest release itself must not be flagged: %s", n)
 	}
-	// No facts at all: the tracked/not-tracked probe already speaks, so stay quiet.
+	// No changes at all: the tracked/not-tracked probe already speaks, so stay quiet.
 	if n := coverageNote("1.0.0", version.NormalizeVersion("1.0.0"), nil, ""); n != "" {
 		t.Errorf("with nothing on record there is nothing to compare: %s", n)
 	}
@@ -183,7 +183,7 @@ func TestConditionPhrase(t *testing.T) {
 
 // A target at or below the running version defines an empty range — measured
 // agent runs sent exactly that and read the guaranteed zero as "no issues".
-// The guard must drop the field (so facts return) and say why in the note.
+// The guard must drop the field (so changes return) and say why in the note.
 func TestResolveTarget(t *testing.T) {
 	running := version.NormalizeVersion("v1.36.8")
 	cases := []struct {
@@ -214,7 +214,7 @@ func TestResolveTarget(t *testing.T) {
 
 // Acceptance criterion from the 2026-07-30 hub campaign (proposal 6): replaying
 // the self-nullifying call — target_version equal to the running version —
-// must bring the action_required facts back instead of a silent zero.
+// must bring the action_required changes back instead of a silent zero.
 func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
 	// Wire-shape fixture (references/affected envelopes), because Fact
 	// round-trips through custom (Un)MarshalJSON that preserves the raw form.

@@ -30,7 +30,7 @@ func newAPIClient(baseURL string) *apiClient {
 }
 
 // Fact keeps the envelope as raw-ish JSON-friendly structs; the MCP tools
-// return facts verbatim, so only the fields the tools themselves inspect
+// return changes verbatim, so only the fields the tools themselves inspect
 // (identity, and what check_stack's brief mode summarizes) get dedicated types.
 // Change is one normalized change from /v1 (RFC 20). It replaces the old Fact:
 // the server now carries three axes the client used to infer — family (what
@@ -168,7 +168,7 @@ func (c Change) MarshalJSON() ([]byte, error) { return c.Raw, nil }
 
 // EffSeverity is what check_stack ranks by: the highest advisory severity the
 // change cites. Without an advisory, security-family changes read as "high"
-// and everything else falls back to the bucket's urgency — the old per-fact
+// and everything else falls back to the bucket's urgency — the old per-change
 // severity column no longer exists.
 func (c Change) EffSeverity() string {
 	best := ""
@@ -330,7 +330,7 @@ func (c *apiClient) getMatter(ctx context.Context, key string, includeAll bool) 
 // getRelease fetches one reviewed release; an empty versionTag asks the server
 // for the project's latest reviewed release.
 // listReleases fetches the newest N reviewed releases of a project as light
-// summaries — the recency path (v0.4.0): list_facts is an oldest-first sync
+// summaries — the recency path (v0.4.0): list_changes is an oldest-first sync
 // feed, so "recent releases of X" questions must not be answered from it.
 func (c *apiClient) listReleases(ctx context.Context, project string, limit int) (json.RawMessage, error) {
 	var raw json.RawMessage
@@ -361,7 +361,7 @@ func (c *apiClient) getRelease(ctx context.Context, project, versionTag string, 
 
 // projectTracked probes the version-less latest-release route (v0.3.0):
 // 200 = tracked project, 404 = unknown slug. check_stack uses it so zero
-// facts from an untracked project is never mistaken for audited silence.
+// changes from an untracked project is never mistaken for audited silence.
 func (c *apiClient) projectTracked(ctx context.Context, project string) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/releases/"+url.PathEscape(project), nil)
 	if err != nil {

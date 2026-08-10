@@ -9,4 +9,4 @@ spec:
   url: "http://ratatosk-mcp:8080/mcp"
   timeout: 30s
   sseReadTimeout: 5m0s
-  description: "Typed, quoted facts from CNCF release notes; check_stack compares running versions locally"
+  description: "Typed, quoted changes from CNCF release notes; check_stack compares running versions locally"

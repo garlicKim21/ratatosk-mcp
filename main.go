@@ -602,14 +602,19 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 	}
 	if !full {
 		out["hint"] = "briefing (a data classification, not a recommendation — changes are provided without warranty and " +
-			"the decision stays with the operator): action_required = critical/high that applies to every install of this version. " +
-			"check_config = critical/high that applies ONLY IF applies_if holds — read the running configuration and " +
+			"the decision stays with the operator). The three lists split on the server's bucket field, NOT on severity: " +
+			"action_required = bucket action, which applies to every install of this version. " +
+			"check_config = bucket check, which applies ONLY IF applies_if holds — read the running configuration and " +
 			"decide before you recommend anything; an unmet condition is not an upgrade reason. Report an unmet one " +
 			"forward instead: this entry's version is the minimum to be on BEFORE enabling what applies_if describes. " +
-			"applies_if_targets names the things to look for when the server stored the condition structurally. The rest is one " +
-			"line each in other_changes; changes on the same matter_key are merged (ids listed together, " +
+			"other_changes = bucket plan, announced for a future release, one line each. " +
+			"applies_if_targets names the things to look for when the server stored the condition structurally. " +
+			"severity here is derived by this server (the highest of the entry's advisories, else a default from " +
+			"family and bucket), so rank urgency with it but never decide who is affected with it. " +
+			"Changes on the same matter_key are merged (ids listed together, " +
 			"applies_if_any when conditions differ); one matter fixed on several release branches is one " +
-			"entry (same_matter_also_addressed_in). " +
+			"entry (same_matter_also_addressed_in) — expand it with get_matter(matter_key) to see which branch " +
+			"carries which advisories. " +
 			`Call again with detail:"full" for every change verbatim, or drill down: get_release(project, version) ` +
 			"for one release with evidence and source URL, changes_by_entity(name) for one CVE/flag/CRD."
 	}

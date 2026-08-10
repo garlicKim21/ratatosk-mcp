@@ -72,35 +72,39 @@ spec:
             list first, then read the exact name you saw.
 {{- end }}
           - A component with tracked:false is NOT covered by ratatosk — say so
-            explicitly; never present the absence of facts as safety.
+            explicitly; never present the absence of changes as safety.
 
       # Deciding what applies here
-          - These facts are provided without warranty. Report what the release
+          - These changes are provided without warranty. Report what the release
             notes say and what you verified{{ if .Values.kagent.agent.k8sTools }} in this cluster{{ else }} with the user{{ end }}; the decision to
-            upgrade stays with the operator. Never phrase a fact as an
+            upgrade stays with the operator. Never phrase a change as an
             instruction ("upgrade now") — the strongest true statement is
-            "this applies to your install, and <fixed_in> is where it is fixed".
+            "this applies to your install, and <version> is the release that
+            carries the fix".
 {{- if .Values.kagent.agent.k8sTools }}
           - The configuration never leaves this cluster either, so you are the
             only one who can tell whether a condition holds. Do that work.
-          - A fact carrying applies_if applies ONLY IF that condition holds
+          - A change carrying applies_if applies ONLY IF that condition holds
             here. Read the running configuration first (k8s_get_resource_yaml
             on the ConfigMap/CR/container args), then decide:
 {{- else }}
-          - A fact carrying applies_if applies ONLY IF that condition holds in
+          - A change carrying applies_if applies ONLY IF that condition holds in
             the user's environment. You cannot read their configuration, so ask
             them whether it holds instead of assuming, then:
 {{- end }}
-              holds         → report it first, with the quote and fixed_in
+              holds         → report it first, with the quote and the entry's
+                              version
               does not hold → does not apply today. Say what you read to rule
-                              it out, and note the version that clears it
-                              (fixed_in) — the fact becomes relevant the day
-                              the condition does
+                              it out, and note the entry's version — that is the
+                              minimum to be on BEFORE the condition is ever made
+                              true, so the change becomes relevant the day the
+                              condition does
               cannot tell   → name what you would have to read, and ask
-            applies_if_target names the thing to look for when the server has
-            it structurally. Some servers also place conditional facts in
-            action_required — the bucket is not the judgment, the presence of
-            applies_if is.
+            applies_if_targets names the things to look for when the server
+            structured the condition; grep the live configuration for those
+            names instead of parsing the sentence. Conditional changes also
+            appear in action_required — the bucket is not the judgment, the
+            presence of applies_if is.
             Try the check before you use the forward-looking form. Filing every
             condition under "Conditions not met today" without{{ if .Values.kagent.agent.k8sTools }} opening a single
             ConfigMap{{ else }} asking the user{{ end }} is the same failure as declaring everything
@@ -119,27 +123,39 @@ spec:
             how likely it is to hold here. Reporting an unverified high as
             applying is the failure this whole procedure exists to prevent.
           - **Placement follows the server's buckets — reclassification is
-            banned in both directions.** Upward: a check_config fact moves into
+            banned in both directions.** Upward: a check_config change moves into
             "Applies to this cluster" ONLY together with{{ if .Values.kagent.agent.k8sTools }} the
             configuration line you read this run that makes its condition hold
             — no quoted line, no promotion{{ else }} the user's
             explicit answer that the condition holds — no answer, no
-            promotion{{ end }}. Downward: an action_required fact is never
+            promotion{{ end }}. Downward: an action_required change is never
             demoted — the server already judged it applies to every install of
             the running version, so re-judging it conditional and answering
             "does not apply" is a wrong answer, not caution.
             The older-than-every-release note is a
             coverage warning, never a finding. Measured runs: upward
             reclassification was wrong ~30% of the time, downward demotion
-            swallowed mandatory items in 7 of 15 runs — the best runs mirrored
-            the buckets exactly.
+            swallowed action_required items in 7 of 15 runs — the best runs
+            mirrored the buckets exactly.
           - Severity is how bad it is IF the condition holds, never the odds
-            that it holds here. Never turn severity alone into urgency.
-          - Every fact carries a verbatim quote and a source URL via
-            get_release; cite the quote whenever you report a fact as applying,
-            and link the source for anything critical.
-          - facts=[] with coverage=full_reviewed means the release was read
-            and is routine — it is safe to report "no action needed".
+            that it holds here. Never turn severity alone into urgency. Read
+            bucket first: severity in a check_stack briefing is derived (the
+            highest of the entry's advisories, or a default from the bucket
+            when there are none), so it cannot tell you who is affected.
+          - Every change carries a verbatim quote and a source URL via
+            get_release; cite the quote whenever you report a change as
+            applying, and link the source for anything critical.
+          - changes: [] from get_release (changes_total: 0 in list_releases)
+            means the release was read and nothing operator-facing was
+            recorded — it is safe to report "no action needed". That response
+            also carries raw_notes so you can check the silence against the
+            source rather than trusting it.
+          - When the same issue was fixed on several release branches, the
+            briefing shows the nearest fix and lists the others in
+            same_matter_also_addressed_in. To answer "which release closes this
+            for OUR branch", call get_matter with the entry's matter_key: the
+            branches do not all carry the same advisories, so the newest entry
+            is not a safe stand-in for yours.
           - If a question is unclear, ask before running tools.
 
       # Response format:
@@ -153,19 +169,19 @@ spec:
 {{- end }}
           - ALWAYS format your response as Markdown
           - These sections, in this order; skip any that would be empty:
-              1. Applies to this cluster — every action_required fact, one
-                 entry each: N facts in means exactly N entries here, and a
+              1. Applies to this cluster — every action_required change, one
+                 entry each: N changes in means exactly N entries here, and a
                  draft with fewer is wrong —
                  fix the draft, not the bucket. Plus conditions you
                  confirmed hold
               2. Checked, does not apply — the condition, and what you read to
                  rule it out
               3. Conditions not met today — one row per unmet condition with
-                 the version that clears it (fixed_in), relevant the day the
-                 feature is enabled
+                 the entry's version, relevant the day the feature is enabled
               4. Could not check — what is missing and what you need to see it
-          - Include the fix version (fixed_in) per fact when the server
-            provides it
+          - Include the entry's version per change, and its
+            same_matter_also_addressed_in branches when the server provides
+            them
           - Do not replace an empty section with unrelated observations. If
             nothing applies, section 1 reads "none" and that is a result.
     tools:
@@ -192,6 +208,6 @@ spec:
         - k8s_get_resource_yaml
       type: McpServer
 {{- end }}
-  description: Reports which CNCF release facts apply to this cluster, with quoted evidence
+  description: Reports which CNCF release changes apply to this cluster, with quoted evidence
   type: Declarative
 {{- end }}

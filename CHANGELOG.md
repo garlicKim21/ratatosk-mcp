@@ -3,6 +3,41 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### The change model, end to end
+
+Ratatosk split its pipeline: what can be decided mechanically is now done
+mechanically, and the model is asked only for what needs judgment. The unit
+that comes out the other side is no longer a `fact` with a severity — it is a
+**change**, described by three independent axes: `family` (security /
+breaking / deprecated), `bucket` (action / check / plan) and `applies_if`
+(the condition, structured where the server could). This release moves every
+part of the server onto that model.
+
+- **Tools are now seven.** `facts_by_entity` → `changes_by_entity`,
+  `list_facts` → `list_changes`, and `get_matter` is new: one matter across
+  every branch that fixed it. The same roll-up lands on several release
+  branches carrying different advisory sets, and only the full list shows
+  that — the newest entry is not a safe stand-in for yours.
+- **`check_stack` splits on `bucket`, not on severity.** That was already the
+  behaviour; the briefing's own `hint` still described it as "critical/high",
+  which is what an agent reads to decide what to do. It now says what the code
+  does, and states that `severity` in a briefing is derived by this server
+  (highest advisory, else a default from family and bucket) — good for ranking
+  urgency, never for deciding who is affected.
+- **Retired response fields are gone from everything that describes them**:
+  `fixed_in`, `coverage`, `assessment`, `group_severity`, `mandatory`,
+  `applies_if_target` (now plural). An entry's `version` is the release
+  carrying the fix; `same_matter_also_addressed_in` names the other branches.
+- **kagent manifests** (chart template and example) allow-listed two tools
+  that no longer exist and therefore hid three that do; their system prompt
+  still instructed the model about retired fields. Both are corrected. The
+  triage procedure itself — the measured-run rules about reclassification,
+  unresolved conditions and roster coverage — is unchanged.
+- **Documentation** is rewritten from live responses: the tools reference in
+  three languages, plus README, install guide and chart/example READMEs.
+
 ## [0.6.2] — 2026-07-31
 
 ### Tool annotations, and a cursor that says how it ends

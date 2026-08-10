@@ -1,6 +1,6 @@
 apiVersion: v2
 name: ratatosk-mcp
-description: MCP server exposing Ratatosk's CNCF release-intelligence facts to in-cluster agents
+description: MCP server exposing Ratatosk's CNCF release-intelligence changes to in-cluster agents
 type: application
 version: 0.6.2
 appVersion: "0.6.2"
