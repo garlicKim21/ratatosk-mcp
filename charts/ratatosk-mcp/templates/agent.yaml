@@ -178,8 +178,9 @@ spec:
         - check_stack
         - get_release
         - list_releases
-        - facts_by_entity
-        - list_facts
+        - changes_by_entity
+        - get_matter
+        - list_changes
       type: McpServer
 {{- if .Values.kagent.agent.k8sTools }}
     - mcpServer:
