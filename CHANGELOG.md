@@ -3,7 +3,7 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
-## [Unreleased]
+## [0.7.4] — 2026-08-10
 
 ### A version whose line does not exist is a dropped prefix, not an empty answer
 
