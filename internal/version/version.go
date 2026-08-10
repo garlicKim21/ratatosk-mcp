@@ -39,7 +39,9 @@ func Compare(a, b []int) int {
 // the leading semver "v" is handled separately (only when it precedes a digit,
 // so a name like "vault-…" isn't mangled).
 var componentPrefixes = []string{
-	"knative-", "api/", "chart/", "ce@", "edge-", "stable-", "release-",
+	// "lts-" joined "stable-" on 2026-08-10: Flatcar tags every channel the same
+	// way, and LTS releases were parsing to nil (see the worker's copy).
+	"knative-", "api/", "chart/", "ce@", "edge-", "stable-", "lts-", "release-",
 }
 
 // NormalizeVersion returns the version's component ints, or nil when the string

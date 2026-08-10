@@ -22,6 +22,10 @@ func TestNormalizeVersion(t *testing.T) {
 		{"api/v1.2.0", []int{1, 2, 0}},
 		// Channel / calver.
 		{"edge-26.1.4", []int{26, 1, 4}},
+		// Flatcar tags every channel alike; "stable-" parsed and "lts-" did not,
+		// which silently excluded the LTS train from every range query.
+		{"stable-4593.2.4", []int{4593, 2, 4}},
+		{"lts-4081.3.7", []int{4081, 3, 7}},
 		{"stable-2.14.0", []int{2, 14, 0}},
 		// Four components (e.g. cloud-custodian).
 		{"0.9.40.1", []int{0, 9, 40, 1}},
