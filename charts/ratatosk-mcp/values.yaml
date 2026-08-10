@@ -38,8 +38,10 @@ auditMode: ""
 # not control (a shared or public endpoint): each caller address then gets its
 # own budget of N tool calls per minute, and one busy caller cannot starve the
 # rest. The address is used as an in-memory bucket key for the length of the
-# window and is never logged, never sent upstream. Requires the reverse proxy
-# in front to pass X-Forwarded-For.
+# window and is never logged, never sent upstream. Read from CF-Connecting-IP,
+# then X-Forwarded-For, then X-Real-IP, then the peer address: the proxy in
+# front must set one of those AND strip whatever the client sent, since a
+# limiter keyed on a caller-controlled value is not a limiter.
 rateLimitPerMin: 0
 
 service:

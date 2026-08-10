@@ -107,7 +107,7 @@ answering:
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.1"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.2"}}}
 ```
 
 With Claude Code, check the `claude mcp list` output:
@@ -164,10 +164,10 @@ laptop with Claude Code or Claude Desktop.
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
-In place of `0.7.1` you can use any
+In place of `0.7.2` you can use any
 [release tag](https://github.com/garlicKim21/ratatosk-mcp/releases), or
 `latest` to always track the newest release — see
 [Version pinning](#version-pinning).
@@ -183,7 +183,7 @@ Claude Desktop registers MCP servers through a config file
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.1"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.2"]
     }
   }
 }
@@ -208,7 +208,7 @@ Any MCP client that speaks stdio works the same way.
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2 - ✔ Connected
 ```
 
 Then ask your agent:
@@ -258,7 +258,7 @@ One startup log line tells you the serving address and the upstream:
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.1"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.2"}
 ```
 
 To check health as well:
@@ -350,12 +350,12 @@ the [chart README](../charts/ratatosk-mcp/README.md).
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(off)* | `1` serves HTTP without session state: no `Mcp-Session-Id` round trip, and required to serve current clients that use the 2026-07-28 MCP spec revision over HTTP. Also recommended for horizontal scaling to two or more replicas. Older clients work either way |
 | `MCP_LOG` | `logLevel` | `info` | Accepted values `info` (default), `debug`, `warn`, `error` — unrecognized values fall back to `info` without a warning. `debug` adds per-call upstream timing; `warn` and `error` reduce output. No level records request arguments — see [Logs and the audit stream](#logs-and-the-audit-stream) |
 | `MCP_AUDIT` | `auditMode` | *(off)* | `metadata` or `full` — the tool-call audit stream. See [Enabling the audit stream](#enabling-the-audit-stream) |
-| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(off)* | Per-caller ceiling on tool calls per minute, for a server that fronts callers you do not control. Each caller address gets its own budget, so one busy caller cannot starve the rest; over the limit answers `429` with `Retry-After`. The address is an in-memory bucket key for the length of the window — never logged, never sent upstream — and the reverse proxy in front must pass `X-Forwarded-For`. Leave off for a single-tenant install |
+| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(off)* | Per-caller ceiling on tool calls per minute, for a server that fronts callers you do not control. Each caller address gets its own budget, so one busy caller cannot starve the rest; over the limit answers `429` with `Retry-After`. The address is an in-memory bucket key for the length of the window — never logged, never sent upstream. It is read from `CF-Connecting-IP`, then `X-Forwarded-For`, then `X-Real-IP`, then the peer address; the proxy in front must set one of those **and strip whatever the client sent**, since a limiter keyed on a caller-controlled value is not a limiter. Leave off for a single-tenant install |
 
 Running HTTP mode directly with Docker:
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
 ## Logs and the audit stream
@@ -392,7 +392,7 @@ Enable it with `MCP_AUDIT`:
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -476,7 +476,7 @@ nothing is recorded.
 ## Version pinning
 
 - **Container image**: built automatically for every release under its
-  version tag (e.g. `0.7.1`), multi-arch (`linux/amd64`, `linux/arm64`).
+  version tag (e.g. `0.7.2`), multi-arch (`linux/amd64`, `linux/arm64`).
   `latest` tracks the newest release — pin a version tag for reproducible
   deployments.
 - **Helm**: the chart is not published to a chart repository; you install
@@ -484,7 +484,7 @@ nothing is recorded.
   cloning:
 
   ```bash
-  git -C ratatosk-mcp checkout v0.7.1
+  git -C ratatosk-mcp checkout v0.7.2
   ```
 
   The image tag follows the chart's `appVersion` by default and can be

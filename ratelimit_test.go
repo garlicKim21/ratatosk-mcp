@@ -126,6 +126,7 @@ func TestCallerKeyPrefersForwardedFor(t *testing.T) {
 		remote  string
 		want    string
 	}{
+		{"cf-connecting-ip wins", map[string]string{"Cf-Connecting-Ip": "198.51.100.1", "X-Forwarded-For": "203.0.113.7"}, "10.0.0.9:5555", "198.51.100.1"},
 		{"forwarded-for first entry", map[string]string{"X-Forwarded-For": "203.0.113.7, 10.0.0.1"}, "10.0.0.9:5555", "203.0.113.7"},
 		{"forwarded-for single", map[string]string{"X-Forwarded-For": "203.0.113.7"}, "10.0.0.9:5555", "203.0.113.7"},
 		{"real-ip fallback", map[string]string{"X-Real-Ip": "198.51.100.4"}, "10.0.0.9:5555", "198.51.100.4"},

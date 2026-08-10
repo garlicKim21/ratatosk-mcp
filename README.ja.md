@@ -49,10 +49,10 @@ Docker、Helm チャート、ソースビルドのいずれでも構いません
 Docker がインストール済みなら：
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
-`0.7.1` が現行リリースです。新しいリリースを追い続けるなら `latest` を
+`0.7.2` が現行リリースです。新しいリリースを追い続けるなら `latest` を
 使ってください。
 
 どちらの場合も、接続を確認してください：

@@ -86,8 +86,25 @@ func (r *rateLimiter) allow(key string, now time.Time) (bool, int) {
 
 // callerKey is the address the reverse proxy says the request came from. It is
 // a bucket key and nothing more — never logged, never sent upstream.
+//
+// Order matters, and CF-Connecting-IP has to come first. Behind Cloudflare
+// without trusted_proxies configured, the reverse proxy sees a Cloudflare edge
+// as its peer and writes that into X-Forwarded-For — and the edge rotates, so
+// keying on it hands one caller a fresh bucket every few requests and the
+// limit never engages (observed live before this order was fixed).
+// CF-Connecting-IP is written by Cloudflare itself and cannot be forged from
+// outside it.
+//
+// Whatever the front proxy is, it must set these headers and strip any the
+// client supplied: a limiter that trusts a caller-controlled key is not a
+// limiter. Self-hosted installs leave the limiter off, so this only binds the
+// deployment that turns it on.
+//
 // X-Forwarded-For is a list; the first entry is the original client.
 func callerKey(req *http.Request) string {
+	if v := strings.TrimSpace(req.Header.Get("Cf-Connecting-Ip")); v != "" {
+		return v
+	}
 	if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
 		first, _, _ := strings.Cut(xff, ",")
 		if v := strings.TrimSpace(first); v != "" {

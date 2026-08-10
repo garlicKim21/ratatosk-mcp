@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: ratatosk-mcp
-          image: ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+          image: ghcr.io/garlickim21/ratatosk-mcp:0.7.2
           env:
             - name: MCP_HTTP_ADDR
               value: ":8080"

@@ -3,6 +3,23 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [0.7.2] — 2026-08-10
+
+### The per-caller limit now actually engages behind a CDN
+
+0.7.1 shipped the limiter with the bucket keyed on `X-Forwarded-For` first.
+Behind Cloudflare, with no `trusted_proxies` configured, the reverse proxy
+sees a Cloudflare *edge* as its peer and writes that into the header — and
+edges rotate, so one caller collected a fresh bucket every few requests and
+the limit never fired. Sixty-two consecutive calls through the hosted
+endpoint all returned 200 where the sixty-first should have been a `429`.
+
+`CF-Connecting-IP` now comes first, then `X-Forwarded-For`, `X-Real-IP`, and
+the peer address. Cloudflare writes that header itself and it cannot be
+forged from outside. Whatever proxy sits in front must set one of these
+**and strip whatever the client supplied**: a limiter keyed on a
+caller-controlled value is not a limiter. The documentation now says so.
+
 ## [0.7.1] — 2026-08-10
 
 ### A briefing that knows which branch you are on

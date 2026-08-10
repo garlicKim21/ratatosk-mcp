@@ -100,7 +100,7 @@ curl -s -X POST https://ratatosk.io/mcp \
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.1"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.2"}}}
 ```
 
 Claude Code라면 `claude mcp list` 출력에서 확인하세요:
@@ -153,10 +153,10 @@ stdio는 MCP 클라이언트가 서버를 자식 프로세스로 띄우고 표�
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
-`0.7.1` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
+`0.7.2` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
 쓰면 되고, 항상 최신을 따라가려면 `latest`를 쓰세요 —
 [버전 고정](#버전-고정) 참조.
 
@@ -170,7 +170,7 @@ Claude Desktop은 CLI 대신 설정 파일(`claude_desktop_config.json`)로 MCP
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.1"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.2"]
     }
   }
 }
@@ -195,7 +195,7 @@ stdio를 지원하는 MCP 클라이언트라면 무엇이든 같은 방식입니
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2 - ✔ Connected
 ```
 
 그리고 에이전트에게 이렇게 물어보세요:
@@ -245,7 +245,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.1"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.2"}
 ```
 
 헬스 체크까지 확인하려면:
@@ -338,12 +338,12 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(꺼짐)* | `1`이면 세션 상태 없는 HTTP: `Mcp-Session-Id` 왕복이 없고, MCP 스펙 2026-07-28 리비전을 쓰는 최신 클라이언트를 HTTP로 받으려면 필요합니다. 레플리카 2개 이상 수평 확장에도 권장. 구형 클라이언트는 어느 쪽이든 동작합니다 |
 | `MCP_LOG` | `logLevel` | `info` | 허용값 `info`(기본)·`debug`·`warn`·`error` — 인식하지 못한 값은 경고 없이 `info`로 처리됩니다. `debug`는 업스트림 호출별 소요 시간을 추가하고, `warn`·`error`는 로그를 줄입니다. 어느 레벨에서도 요청 인자는 기록되지 않습니다 — [로그와 감사 스트림](#로그와-감사-스트림) 참조 |
 | `MCP_AUDIT` | `auditMode` | *(꺼짐)* | `metadata` 또는 `full` — 도구 호출 감사 스트림. [감사 스트림 켜기](#감사-스트림-켜기) 참조 |
-| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(꺼짐)* | 호출자당 분당 도구 호출 상한. 내가 통제하지 않는 호출자를 대신 받는 서버용입니다. 호출자 주소마다 몫을 따로 주므로 한 명이 바쁘다고 나머지가 굶지 않고, 넘기면 `Retry-After`가 붙은 `429`가 돌아옵니다. 주소는 창이 유지되는 동안의 메모리 버킷 키일 뿐이고 — 기록하지도, 상류로 보내지도 않습니다 — 앞단 리버스 프록시가 `X-Forwarded-For`를 넘겨줘야 합니다. 단일 이용자 설치라면 꺼 두세요 |
+| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(꺼짐)* | 호출자당 분당 도구 호출 상한. 내가 통제하지 않는 호출자를 대신 받는 서버용입니다. 호출자 주소마다 몫을 따로 주므로 한 명이 바쁘다고 나머지가 굶지 않고, 넘기면 `Retry-After`가 붙은 `429`가 돌아옵니다. 주소는 창이 유지되는 동안의 메모리 버킷 키일 뿐이고 기록하지도, 상류로 보내지도 않습니다. `CF-Connecting-IP` → `X-Forwarded-For` → `X-Real-IP` → 피어 주소 순으로 읽으므로, 앞단 프록시가 그중 하나를 채우고 **클라이언트가 보낸 값은 지워야** 합니다. 호출자가 조작할 수 있는 값을 키로 쓰면 제한이 아니니까요. 단일 이용자 설치라면 꺼 두세요 |
 
 docker로 HTTP 모드를 직접 띄우는 예:
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
 ## 로그와 감사 스트림
@@ -379,7 +379,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -459,14 +459,14 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 ## 버전 고정
 
-- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.7.1`)로 자동 빌드되며
+- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.7.2`)로 자동 빌드되며
   멀티 아치(`linux/amd64`, `linux/arm64`)입니다. `latest`는 최신 릴리스를
   따라갑니다 — 재현 가능한 배포에는 버전 태그를 고정하세요.
 - **Helm**: 차트는 차트 저장소로 발행되지 않고 저장소 클론으로만
   설치합니다. 특정 버전에 고정하려면 클론 후 릴리스 태그를 체크아웃하세요:
 
   ```bash
-  git -C ratatosk-mcp checkout v0.7.1
+  git -C ratatosk-mcp checkout v0.7.2
   ```
 
   이미지 태그는 기본적으로 차트의 `appVersion`을 따르고, `image.tag` 값으로

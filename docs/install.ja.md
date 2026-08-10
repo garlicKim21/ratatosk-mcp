@@ -107,7 +107,7 @@ JSON に `"serverInfo"` と `"name":"ratatosk"` が見えれば正常です：
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.1"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.2"}}}
 ```
 
 Claude Code なら `claude mcp list` の出力で確認してください：
@@ -163,10 +163,10 @@ stdio は、MCP クライアントがサーバーを子プロセスとして起�
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
-`0.7.1` の部分には任意の
+`0.7.2` の部分には任意の
 [リリースタグ](https://github.com/garlicKim21/ratatosk-mcp/releases)を
 指定できます。常に最新を追うなら `latest` を使ってください —
 [バージョン固定](#バージョン固定)参照。
@@ -182,7 +182,7 @@ Claude Desktop は CLI の代わりに設定ファイル
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.1"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.2"]
     }
   }
 }
@@ -208,7 +208,7 @@ stdio に対応した MCP クライアントであれば、いずれも同じ手
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2 - ✔ Connected
 ```
 
 そのうえで、エージェントにこう聞いてみてください：
@@ -259,7 +259,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.1"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.2"}
 ```
 
 ヘルスチェックまで確認するなら：
@@ -357,12 +357,12 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *（オフ）* | `1` でセッション状態なしの HTTP：`Mcp-Session-Id` の往復がなく、MCP 仕様 2026-07-28 リビジョンを使う最新クライアントを HTTP で受けるには必須です。レプリカ 2 つ以上への水平スケールにも推奨。旧来のクライアントはどちらでも動きます |
 | `MCP_LOG` | `logLevel` | `info` | 許容値は `info`（デフォルト）・`debug`・`warn`・`error` — 認識できない値は警告なしに `info` として扱われます。`debug` はアップストリーム呼び出しごとの所要時間を追加し、`warn`・`error` はログを減らします。どのレベルでもリクエスト引数は記録されません — [ログと監査ストリーム](#ログと監査ストリーム)参照 |
 | `MCP_AUDIT` | `auditMode` | *（オフ）* | `metadata` または `full` — ツール呼び出しの監査ストリーム。[監査ストリームを有効にする](#監査ストリームを有効にする)参照 |
-| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *（オフ）* | 呼び出し元ごとの毎分ツール呼び出し上限。自分が管理していない呼び出し元を受けるサーバー向けです。呼び出し元アドレスごとに枠を分けるため、誰か 1 人が忙しくても他が枯渇しません。超えると `Retry-After` 付きの `429` を返します。アドレスはウィンドウの間だけのメモリ上のバケットキーであり、記録もアップストリームへの転送もしません。前段のリバースプロキシが `X-Forwarded-For` を渡す必要があります。単一利用者のインストールではオフのままに |
+| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *（オフ）* | 呼び出し元ごとの毎分ツール呼び出し上限。自分が管理していない呼び出し元を受けるサーバー向けです。呼び出し元アドレスごとに枠を分けるため、誰か 1 人が忙しくても他が枯渇しません。超えると `Retry-After` 付きの `429` を返します。アドレスはウィンドウの間だけのメモリ上のバケットキーであり、記録もアップストリームへの転送もしません。`CF-Connecting-IP` → `X-Forwarded-For` → `X-Real-IP` → ピアアドレスの順に読むため、前段のプロキシがいずれかを設定し、**クライアントが送ってきた値は削除する**必要があります。呼び出し元が操作できる値をキーにしたら制限になりません。単一利用者のインストールではオフのままに |
 
 docker で HTTP モードを直接起動する例：
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 ```
 
 ## ログと監査ストリーム
@@ -400,7 +400,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.1
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.2
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -483,7 +483,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 ## バージョン固定
 
-- **コンテナイメージ**：リリースごとにバージョンタグ（例：`0.7.1`）で自動
+- **コンテナイメージ**：リリースごとにバージョンタグ（例：`0.7.2`）で自動
   ビルドされ、マルチアーキテクチャ（`linux/amd64`、`linux/arm64`）です。
   `latest` は最新リリースを追います — 再現可能なデプロイにはバージョンタグを
   固定してください。
@@ -492,7 +492,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
   クローン後にリリースタグをチェックアウトしてください：
 
   ```bash
-  git -C ratatosk-mcp checkout v0.7.1
+  git -C ratatosk-mcp checkout v0.7.2
   ```
 
   イメージタグはデフォルトでチャートの `appVersion` に従い、`image.tag`
