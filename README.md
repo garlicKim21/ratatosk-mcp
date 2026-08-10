@@ -4,7 +4,7 @@
 
 # ratatosk-mcp
 
-**Ratatosk reads CNCF release notes every hour. Your agents get the facts.**
+**Ratatosk reads CNCF release notes every hour. Your agents get the changes.**
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
@@ -21,11 +21,11 @@
 In Norse myth, Ratatoskr is the squirrel that carries messages up and down the
 world tree. This one carries release intelligence. [ratatosk.io](https://ratatosk.io)
 watches 76 CNCF projects and turns every release note into typed, entity-level
-facts: security fixes, breaking changes, removals, deprecations, changed
-defaults. Plain bug fixes and marketing copy are filtered out. What remains is
-what an operator acts on.
+changes: security fixes, breaking changes, removals, deprecations, changed
+defaults — each one classified by how you should act on it now. Routine lines
+are recorded too, but kept out of the way.
 
-This repository is the MCP server that hands those facts to your agent as
+This repository is the MCP server that hands those changes to your agent as
 tools. MCP (Model Context Protocol) is the open standard AI agents use to call
 external tools; any MCP-capable client — Claude Code, Claude Desktop, kagent,
 your own SDK agent — can connect. No account, no API key.
@@ -63,29 +63,41 @@ Then ask your agent a question the tools can answer:
 
 > **You:** "We run envoy v1.36.8 and istio 1.30.1. Anything we must do before upgrading?"
 >
-> **Your agent** calls `check_stack` and answers from facts: the CVEs fixed
-> after your version, the APIs removed on your upgrade path, the defaults that
-> changed. Each fact carries a verbatim quote from the release notes as
-> evidence.
+> **Your agent** calls `check_stack` and answers from the record: the CVEs
+> fixed after your version, the APIs removed on your upgrade path, the defaults
+> that changed — separated into what applies to everyone and what applies only
+> if your configuration matches. Each change carries a verbatim quote from the
+> release notes as evidence.
 
 Other clients (Claude Desktop, kagent, in-cluster agents) and the full setup
 reference: see the [install guide](docs/install.en.md).
 
 ## Tools
 
-Two terms the tools use: a **fact** is one extracted change from an official
-release note — a security fix, a removal, a deprecation, a changed default —
-tied to the exact identifiers it touches (a CVE id, a flag, a CRD, a config
-field), with a verbatim quote from the note as evidence. Every fact carries a
-**severity** from `info` to `critical`.
+Two things the tools speak in. A **change** is one thing a release did, taken
+from an official release note and tied to the exact identifiers it touches
+(a CVE id, a flag, a CRD, a config field), with a verbatim quote as evidence.
+Every change carries three axes:
+
+- **family** — `security`, `breaking`, or `deprecated`: what kind of thing it is.
+- **bucket** — `action` (applies to everyone), `check` (only if `applies_if`
+  matches your setup), `plan` (announced for later), `other` (the full record).
+- **applies_if** — a boolean expression you can evaluate against your own
+  manifests, not prose to read.
+
+A **matter** is the issue underneath, identified by `matter_key` and stable
+across releases and branches: the same security roll-up landing on five
+branches shares one key. Severity lives on the cited advisories and is read
+from the ledger's current value, not frozen at analysis time.
 
 | Tool | What it does |
 |---|---|
-| `check_stack` | Takes the component versions you run and returns the facts on your upgrade path — critical/high split from the rest, one entry per advisory, each with its quote and ids. The comparison happens inside the server process — which is your own process when you self-host ([how your component versions are handled](#how-your-component-versions-are-handled)) |
-| `list_facts` | The incremental fact feed, oldest-analyzed first. Filter by project, type, or severity; page with the `since` cursor to keep a local copy in sync |
-| `facts_by_entity` | Reverse lookup: every fact touching one exact identifier — such as a CVE id, CRD, feature gate, flag, config field, or dependency |
-| `get_release` | One release in full: its facts, an overall assessment, and the link to the original note. A fully reviewed release with zero facts means it was read and found routine |
-| `list_releases` | The newest releases of one project as one-line summaries (date, fact counts by severity), newest first — the tool for "what changed in X lately" |
+| `check_stack` | Takes the component versions you run and returns the changes on your upgrade path, split by bucket: `action_required` applies to everyone, `check_config` only if its `applies_if` holds. The comparison happens inside the server process — which is your own process when you self-host ([how your component versions are handled](#how-your-component-versions-are-handled)) |
+| `list_changes` | The incremental change feed, oldest-analyzed first. Filter by project, family, or bucket; page with the `since` cursor to keep a local copy in sync |
+| `changes_by_entity` | Reverse lookup: every change touching one exact identifier — such as a CVE id, CRD, feature gate, flag, config field, or dependency |
+| `get_matter` | Every release in which one matter appeared. The same roll-up lands on several branches carrying different advisories — told only the newest, you would assume you were covered |
+| `get_release` | One release in full: its changes, a summary, and the link to the original note. A release with zero changes means it was read and found routine |
+| `list_releases` | The newest releases of one project as one-line summaries (dates, counts by bucket and family, highest advisory severity), newest first — the tool for "what changed in X lately" |
 | `list_projects` | The roster of tracked projects and their canonical slugs (the short project id every other tool takes) — look names up here instead of guessing |
 
 Full per-tool parameters, example calls, and measured responses live in the [tools reference](docs/tools.en.md).
@@ -94,7 +106,7 @@ Full per-tool parameters, example calls, and measured responses live in the [too
 
 **Self-hosted:** `check_stack` sends only project slugs to the server and
 compares versions locally, inside this process — the versions you pass it
-never reach ratatosk.io. The server publishes facts; your agent decides what
+never reach ratatosk.io. The server publishes changes; your agent decides what
 applies. The version normalizer is bundled (`internal/version`), so range
 comparison happens client-side too. This holds for upgrade questions as well:
 the upstream API has a convenience endpoint (`/v1/upgrade/{project}`) that

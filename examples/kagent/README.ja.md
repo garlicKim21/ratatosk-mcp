@@ -3,9 +3,9 @@
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
 [Ratatosk](https://ratatosk.io) は CNCF graduated/incubating 全プロジェクトの
-リリースノートを毎日読み、型付きファクト — セキュリティ修正、破壊的変更、
-削除、非推奨化、既定値の変更 — を抽出します。各ファクトには原文の引用と
-ソース URL が付きます。この MCP サーバーがそのファクトをクラスタ内の
+リリースノートを毎日読み、型付きの change — セキュリティ修正、破壊的変更、
+削除、非推奨化、既定値の変更 — を抽出します。各 change には原文の引用と
+ソース URL が付きます。この MCP サーバーがその change をクラスタ内の
 エージェントに提供します。
 
 プライバシー: `check_stack` ツールは稼働中のバージョンをこのプロセス内で
@@ -18,11 +18,12 @@
 | ツール | 用途 |
 | --- | --- |
 | `list_projects` | 追跡プロジェクトの一覧 — スラッグはまずここで確認 |
-| `check_stack` | 稼働中バージョンを既知のファクトと照合（ローカル比較） |
-| `get_release` | レビュー済みリリース 1 件: 全ファクトとソース URL |
+| `check_stack` | 稼働中バージョンを既知の change と照合（ローカル比較）、層別に分けて返す |
+| `get_release` | 分析済みリリース 1 件: 全 change とソース URL |
 | `list_releases` | プロジェクト 1 件の最新リリース N 件のサマリーを新しい順で |
-| `facts_by_entity` | 逆引き: 1 つの CVE/フラグ/CRD に触れた全ファクト |
-| `list_facts` | `since` カーソルでの増分ファクトフィード |
+| `changes_by_entity` | 逆引き: 1 つの CVE/フラグ/CRD に触れた全 change |
+| `get_matter` | 一つの事案が登場したリリースすべて |
+| `list_changes` | `since` カーソルでの増分 change フィード |
 
 ## インストール
 
@@ -54,5 +55,5 @@ helm install ratatosk-mcp ../../charts/ratatosk-mcp -n kagent --set kagent.enabl
 > 「kubernetes v1.36.0、cilium v1.17.18、envoy v1.38.3 を運用中です。
 > アップグレード前に対応が必要なものはありますか？」
 
-エージェントは深刻度順に整理したファクトに、リリースノート原文の引用と
+エージェントは深刻度順に整理した change に、リリースノート原文の引用と
 ソースリンクを添えて答えます。

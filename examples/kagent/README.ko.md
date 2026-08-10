@@ -3,9 +3,9 @@
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
 [Ratatosk](https://ratatosk.io)는 CNCF graduated/incubating 프로젝트 전체의
-릴리스 노트를 매일 읽고 타입 있는 팩트 — 보안 수정, 브레이킹 체인지, 제거,
-지원 중단, 기본값 변경 — 를 추출합니다. 팩트마다 원문 인용과 소스 URL이
-붙습니다. 이 MCP 서버가 그 팩트를 클러스터 내 에이전트에게 제공합니다.
+릴리스 노트를 매일 읽고 타입 있는 변경(change) — 보안 수정, 브레이킹 체인지, 제거,
+지원 중단, 기본값 변경 — 를 추출합니다. 변경마다 원문 인용과 소스 URL이
+붙습니다. 이 MCP 서버가 그 변경을 클러스터 내 에이전트에게 제공합니다.
 
 프라이버시: `check_stack` 툴은 실행 중인 버전을 이 프로세스 안에서 로컬로
 비교합니다. ratatosk 서버로는 프로젝트 슬러그만 전송되고, 버전은 클러스터
@@ -17,11 +17,12 @@
 | 도구 | 용도 |
 | --- | --- |
 | `list_projects` | 추적 프로젝트 전목록 — 슬러그는 먼저 여기서 확인 |
-| `check_stack` | 실행 중 버전을 알려진 팩트와 대조 (로컬 비교) |
-| `get_release` | 리뷰된 릴리스 하나: 전체 팩트와 소스 URL |
+| `check_stack` | 실행 중 버전을 알려진 변경과 대조 (로컬 비교), 층별로 갈라 반환 |
+| `get_release` | 분석된 릴리스 하나: 전체 변경과 소스 URL |
 | `list_releases` | 프로젝트 하나의 최근 릴리스 N건 요약을 최신순으로 |
-| `facts_by_entity` | 역인덱스: 하나의 CVE/플래그/CRD를 건드린 모든 팩트 |
-| `list_facts` | `since` 커서로 증분 팩트 피드 |
+| `changes_by_entity` | 역인덱스: 하나의 CVE/플래그/CRD를 건드린 모든 변경 |
+| `get_matter` | 한 사안이 등장한 릴리스 전부 |
+| `list_changes` | `since` 커서로 증분 변경 피드 |
 
 ## 설치
 
@@ -52,5 +53,5 @@ helm install ratatosk-mcp ../../charts/ratatosk-mcp -n kagent --set kagent.enabl
 > "kubernetes v1.36.0, cilium v1.17.18, envoy v1.38.3을 돌리는데,
 > 업그레이드 전에 조치할 게 있나요?"
 
-에이전트는 심각도 순으로 정리된 팩트에 릴리스 노트 원문 인용과 소스 링크를
+에이전트는 심각도 순으로 정리된 변경에 릴리스 노트 원문 인용과 소스 링크를
 붙여 답합니다.

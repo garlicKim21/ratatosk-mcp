@@ -2,17 +2,18 @@
 
 [English](install.en.md) · [한국어](install.ko.md) · [日本語](install.ja.md)
 
-This page covers the four ways to use Ratatosk's release facts from an AI
+This page covers the four ways to use Ratatosk's release changes from an AI
 agent: the hosted endpoint, with nothing to install; a stdio server on your
 laptop; a Helm deployment inside a Kubernetes cluster; and the kagent
 integration.
 
 **MCP (Model Context Protocol)** is the standard protocol AI agents use to
 call external tools. ratatosk-mcp is a server that speaks this protocol and
-provides six release-fact tools: `check_stack` (takes the component versions
-you run and returns the facts on your upgrade path), `list_facts` (the
-incremental fact feed), `facts_by_entity` (reverse lookup by identifier —
-CVE ids, flags, and so on), `get_release` (one release in full),
+provides seven tools: `check_stack` (takes the component versions you run and
+returns the changes on your upgrade path, split by how to act on them),
+`list_changes` (the incremental change feed), `changes_by_entity` (reverse
+lookup by identifier — CVE ids, flags, and so on), `get_matter` (every release
+in which one matter appeared), `get_release` (one release in full),
 `list_releases` (recent releases of one project as summaries), and
 `list_projects` (tracked projects and their canonical slugs). Any
 MCP-capable client can connect: Claude Code, Claude Desktop, kagent, your
@@ -341,7 +342,7 @@ the [chart README](../charts/ratatosk-mcp/README.md).
 
 | Env | Chart value | Default | What it does |
 |---|---|---|---|
-| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | Upstream facts API (`/v1`, public, read-only). Change it to route egress through a proxy or a mirror |
+| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | Upstream changes API (`/v1`, public, read-only). Change it to route egress through a proxy or a mirror |
 | `MCP_HTTP_ADDR` | *(set automatically by the chart from `service.port`)* | *(empty = stdio)* | When set (e.g. `:8080`), serve streamable HTTP at `/mcp` instead of stdio, with `/healthz` |
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(off)* | `1` serves HTTP without session state: no `Mcp-Session-Id` round trip, and required to serve current clients that use the 2026-07-28 MCP spec revision over HTTP. Also recommended for horizontal scaling to two or more replicas. Older clients work either way |
 | `MCP_LOG` | `logLevel` | `info` | Accepted values `info` (default), `debug`, `warn`, `error` — unrecognized values fall back to `info` without a warning. `debug` adds per-call upstream timing; `warn` and `error` reduce output. No level records request arguments — see [Logs and the audit stream](#logs-and-the-audit-stream) |
@@ -370,7 +371,7 @@ can carry the running versions. The log text is instead reconstructed from
 just the endpoint pattern and the kind of error:
 
 ```json
-{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/facts","kind":"connection_refused","tool":"check_stack"}
+{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/changes","kind":"connection_refused","tool":"check_stack"}
 ```
 
 Raising to `MCP_LOG=debug` adds one line per upstream call with the endpoint
@@ -460,7 +461,7 @@ nothing is recorded.
 | Symptom | Check | Cause and fix |
 |---|---|---|
 | Tool calls return errors (`check_stack` instead reports `fetch failed: …` in each component's `note`); the log shows `"msg":"upstream fetch failed"` with `kind: connection_refused`, `dns`, or `timeout` | `kubectl logs deploy/ratatosk-mcp` (locally: your client's MCP logs) | Egress is blocked. Allow outbound HTTPS to `ratatosk.io:443`, or set up a mirror and point `RATATOSK_URL` (chart: `ratatoskUrl`) at it |
-| The log shows `"msg":"upstream rate limited"`, `status: 429` | Same as above | Upstream limit exceeded (60 requests/minute per IP). Replace per-project `list_facts` polling with a single `check_stack` call, and retry after a pause |
+| The log shows `"msg":"upstream rate limited"`, `status: 429` | Same as above | Upstream limit exceeded (60 requests/minute per IP). Replace per-project `list_changes` polling with a single `check_stack` call, and retry after a pause |
 | An HTTP client gets `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers` | The `Mcp-Protocol-Version` header the client sends | The client speaks the 2026-07-28 MCP revision, which stateful HTTP mode rejects. Turn on `--set statelessHttp=true` (env: `MCP_HTTP_STATELESS=1`) — the `StreamableHTTPOptions.Stateless` named in the error is the Go SDK's name for the same switch |
 | `ratatosk-agent` does not appear in the kagent UI | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | Installing with `kagent.enabled=true` fails on a cluster without the kagent CRDs — install kagent first. The manifest route hardcodes `namespace: kagent`, so if kagent lives in another namespace, edit the manifests |
 | `ImagePullBackOff` after switching the kagent agent runtime to the Go ADK | `kubectl describe pod` | A known issue in kagent 0.9.12 itself, unrelated to this chart ([#2247], fixed after 0.9.12): the Go ADK image is published only to `ghcr.io` while the controller default points at the retired `cr.kagent.dev`. Workaround: `--set controller.agentImage.registry=ghcr.io` on the kagent install |

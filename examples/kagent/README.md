@@ -3,9 +3,9 @@
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
 [Ratatosk](https://ratatosk.io) reads every CNCF graduated/incubating project's
-release notes daily and extracts typed facts — security fixes, breaking
+release notes daily and extracts typed changes — security fixes, breaking
 changes, removals, deprecations, default changes — each with a verbatim quote
-and a source URL. This MCP server exposes those facts to in-cluster agents.
+and a source URL. This MCP server exposes those changes to in-cluster agents.
 
 Privacy: the `check_stack` tool compares your running versions locally, inside
 this process. Only project slugs are sent to the ratatosk server; versions
@@ -17,11 +17,12 @@ credentials (rate limit 60 req/min per IP).
 | Tool | Purpose |
 | --- | --- |
 | `list_projects` | The tracked-project roster — resolve slugs here first |
-| `check_stack` | Compare running versions against known facts (local comparison) |
-| `get_release` | One reviewed release with all facts and the source URL |
+| `check_stack` | Compare running versions against known changes (local comparison), split by how to act |
+| `get_release` | One analyzed release with all its changes and the source URL |
 | `list_releases` | The newest N releases of one project as light summaries, newest first |
-| `facts_by_entity` | Reverse index: every fact touching one CVE/flag/CRD |
-| `list_facts` | Incremental fact feed with a `since` cursor |
+| `changes_by_entity` | Reverse index: every change touching one CVE/flag/CRD |
+| `get_matter` | Every release in which one matter appeared |
+| `list_changes` | Incremental change feed with a `since` cursor |
 
 ## Install
 
@@ -54,5 +55,5 @@ tell it what you run:
 > "We run kubernetes v1.36.0, cilium v1.17.18 and envoy v1.38.3 — anything
 > that needs action before we upgrade?"
 
-The agent answers with severity-ranked facts, each backed by a quote from the
+The agent answers with severity-ranked changes, each backed by a quote from the
 release note and a link to the source.

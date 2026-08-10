@@ -95,7 +95,7 @@ One-line JSON via `log/slog`, the same house schema as the ratatosk worker
 (`time`, `level`, `msg`, `service:"mcp"`, plus event fields):
 
 ```json
-{"time":"2026-07-30T01:20:00Z","level":"ERROR","msg":"upstream fetch failed","service":"mcp","tool":"check_stack","upstream":"/v1/facts","status":502}
+{"time":"2026-07-30T01:20:00Z","level":"ERROR","msg":"upstream fetch failed","service":"mcp","tool":"check_stack","upstream":"/v1/changes","status":502}
 ```
 
 JSON because collectors (alloy/Loki here, whatever the operator runs there)

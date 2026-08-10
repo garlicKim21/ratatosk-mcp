@@ -2,16 +2,17 @@
 
 [English](install.en.md) · [한국어](install.ko.md) · [日本語](install.ja.md)
 
-이 페이지는 Ratatosk의 릴리스 팩트를 AI 에이전트에서 쓰는 네 가지 방법을
+이 페이지는 Ratatosk의 릴리스 변경(change)을 AI 에이전트에서 쓰는 네 가지 방법을
 설명합니다. 설치 없이 호스팅 엔드포인트에 연결하기, 노트북에서 stdio 서버
 띄우기, 쿠버네티스 클러스터에 Helm으로 배포하기, 그리고 kagent와
 연동하기입니다.
 
 **MCP(Model Context Protocol)**는 AI 에이전트가 외부 도구를 호출할 때 쓰는
-표준 프로토콜입니다. ratatosk-mcp는 이 프로토콜로 릴리스 팩트 도구 6개를
-제공하는 서버입니다. `check_stack`(실행 중인 버전 목록을 받아 업그레이드
-경로의 팩트 반환), `list_facts`(증분 팩트 피드), `facts_by_entity`(CVE·플래그
-등 식별자 역조회), `get_release`(릴리스 하나 전체),
+표준 프로토콜입니다. ratatosk-mcp는 이 프로토콜로 도구 7개를 제공하는
+서버입니다. `check_stack`(실행 중인 버전 목록을 받아 업그레이드 경로의 변경을
+층별로 갈라 반환), `list_changes`(증분 변경 피드), `changes_by_entity`(CVE·플래그
+등 식별자 역조회), `get_matter`(한 사안이 등장한 릴리스 전부),
+`get_release`(릴리스 하나 전체),
 `list_releases`(프로젝트별 최신 릴리스 요약), `list_projects`(추적 프로젝트와
 정식 슬러그)입니다. Claude Code, Claude Desktop, kagent, 직접 만든 SDK
 에이전트처럼 MCP를 지원하는 클라이언트라면 무엇이든 연결할 수 있습니다.
@@ -329,7 +330,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 
 | 환경 변수 | 차트 값 | 기본값 | 설명 |
 |---|---|---|---|
-| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | 업스트림 facts API(`/v1`, 공개, 읽기 전용). egress를 프록시·미러로 우회할 때 변경 |
+| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | 업스트림 changes API(`/v1`, 공개, 읽기 전용). egress를 프록시·미러로 우회할 때 변경 |
 | `MCP_HTTP_ADDR` | *(차트가 `service.port`로 자동 설정)* | *(없음 = stdio)* | 설정 시(예: `:8080`) stdio 대신 `/mcp` Streamable HTTP로 동작, `/healthz` 포함 |
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(꺼짐)* | `1`이면 세션 상태 없는 HTTP: `Mcp-Session-Id` 왕복이 없고, MCP 스펙 2026-07-28 리비전을 쓰는 최신 클라이언트를 HTTP로 받으려면 필요합니다. 레플리카 2개 이상 수평 확장에도 권장. 구형 클라이언트는 어느 쪽이든 동작합니다 |
 | `MCP_LOG` | `logLevel` | `info` | 허용값 `info`(기본)·`debug`·`warn`·`error` — 인식하지 못한 값은 경고 없이 `info`로 처리됩니다. `debug`는 업스트림 호출별 소요 시간을 추가하고, `warn`·`error`는 로그를 줄입니다. 어느 레벨에서도 요청 인자는 기록되지 않습니다 — [로그와 감사 스트림](#로그와-감사-스트림) 참조 |
@@ -357,7 +358,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 오류 종류만으로 로그 문구를 새로 만들어 기록합니다:
 
 ```json
-{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/facts","kind":"connection_refused","tool":"check_stack"}
+{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/changes","kind":"connection_refused","tool":"check_stack"}
 ```
 
 `MCP_LOG=debug`로 올리면 여기에 더해 업스트림 호출마다 엔드포인트 패턴·상태
@@ -444,7 +445,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 | 증상 | 확인 | 원인과 해결 |
 |---|---|---|
 | 도구 호출이 오류를 반환하고(`check_stack`은 오류 대신 컴포넌트별 `note`에 `fetch failed: …`), 로그에 `"msg":"upstream fetch failed"`와 `kind: connection_refused`·`dns`·`timeout` | `kubectl logs deploy/ratatosk-mcp` (로컬은 클라이언트의 MCP 로그) | egress 차단. `ratatosk.io:443` 아웃바운드 HTTPS를 허용하거나, 미러를 두고 `RATATOSK_URL`(차트: `ratatoskUrl`)로 지정 |
-| 로그에 `"msg":"upstream rate limited"`, `status: 429` | 위와 동일 | 업스트림 한도(분당 60요청/IP) 초과. 프로젝트별 `list_facts` 폴링 대신 `check_stack` 하나로 묶어 호출하고, 잠시 후 재시도 |
+| 로그에 `"msg":"upstream rate limited"`, `status: 429` | 위와 동일 | 업스트림 한도(분당 60요청/IP) 초과. 프로젝트별 `list_changes` 폴링 대신 `check_stack` 하나로 묶어 호출하고, 잠시 후 재시도 |
 | HTTP 클라이언트가 `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers`를 받음 | 클라이언트가 보내는 `Mcp-Protocol-Version` 헤더 | 클라이언트가 MCP 2026-07-28 리비전을 쓰는데 상태 유지 HTTP 모드는 이를 거절합니다. `--set statelessHttp=true`(환경 변수: `MCP_HTTP_STATELESS=1`)를 켜세요 — 오류 메시지의 `StreamableHTTPOptions.Stateless`는 같은 스위치의 Go SDK 쪽 이름입니다 |
 | kagent UI에 `ratatosk-agent`가 나타나지 않음 | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | kagent CRD가 없는 클러스터에서는 `kagent.enabled=true` 설치가 실패합니다 — kagent를 먼저 설치하세요. 매니페스트 경로는 `namespace: kagent`가 하드코딩되어 있으므로 kagent를 다른 네임스페이스에 설치했다면 매니페스트를 수정해야 합니다 |
 | kagent에서 에이전트 런타임을 Go ADK로 바꾸면 `ImagePullBackOff` | `kubectl describe pod` | 이 차트와 무관한 kagent 0.9.12 자체의 알려진 문제([#2247], 0.9.12 이후 수정): Go ADK 이미지는 `ghcr.io`에만 발행되는데 컨트롤러 기본값이 폐기된 `cr.kagent.dev`를 가리킵니다. 우회: kagent 설치에 `--set controller.agentImage.registry=ghcr.io` |

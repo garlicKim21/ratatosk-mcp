@@ -2,17 +2,18 @@
 
 [English](install.en.md) · [한국어](install.ko.md) · [日本語](install.ja.md)
 
-このページでは、Ratatosk のリリース fact を AI エージェントから使う 4 つの
+このページでは、Ratatosk のリリース change を AI エージェントから使う 4 つの
 方法を説明します。何もインストールせずホスト版エンドポイントに接続する
 方法、手元の PC で stdio サーバーを動かす方法、Kubernetes クラスタに Helm
 でデプロイする方法、そして kagent と統合する方法です。
 
 **MCP（Model Context Protocol）** は、AI エージェントが外部ツールを呼び出す
-ときに使う標準プロトコルです。ratatosk-mcp はこのプロトコルで 6 つの
-リリース fact ツールを提供するサーバーです。`check_stack`（稼働中の
-バージョン一覧を受け取り、アップグレード経路上の fact を返す）、
-`list_facts`（増分 fact フィード）、`facts_by_entity`（CVE・フラグなど
-識別子からの逆引き）、`get_release`（リリース 1 件の全体）、
+ときに使う標準プロトコルです。ratatosk-mcp はこのプロトコルで 7 つの
+ツールを提供するサーバーです。`check_stack`（稼働中のバージョン一覧を受け取り、
+アップグレード経路上の change を層別に分けて返す）、
+`list_changes`（増分 change フィード）、`changes_by_entity`（CVE・フラグなど
+識別子からの逆引き）、`get_matter`（一つの事案が登場したリリースすべて）、
+`get_release`（リリース 1 件の全体）、
 `list_releases`（プロジェクトごとの最新リリース要約）、
 `list_projects`（追跡プロジェクトと正規スラッグ）です。Claude Code、
 Claude Desktop、kagent、自作の SDK エージェントなど、MCP に対応した
@@ -347,7 +348,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 
 | 環境変数 | チャート値 | デフォルト | 説明 |
 |---|---|---|---|
-| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | アップストリームの facts API（`/v1`、公開、読み取り専用）。egress をプロキシ・ミラー経由にするとき変更 |
+| `RATATOSK_URL` | `ratatoskUrl` | `https://ratatosk.io` | アップストリームの changes API（`/v1`、公開、読み取り専用）。egress をプロキシ・ミラー経由にするとき変更 |
 | `MCP_HTTP_ADDR` | *（チャートが `service.port` から自動設定）* | *（未設定 = stdio）* | 設定時（例：`:8080`）は stdio の代わりに `/mcp` の Streamable HTTP で提供、`/healthz` 付き |
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *（オフ）* | `1` でセッション状態なしの HTTP：`Mcp-Session-Id` の往復がなく、MCP 仕様 2026-07-28 リビジョンを使う最新クライアントを HTTP で受けるには必須です。レプリカ 2 つ以上への水平スケールにも推奨。旧来のクライアントはどちらでも動きます |
 | `MCP_LOG` | `logLevel` | `info` | 許容値は `info`（デフォルト）・`debug`・`warn`・`error` — 認識できない値は警告なしに `info` として扱われます。`debug` はアップストリーム呼び出しごとの所要時間を追加し、`warn`・`error` はログを減らします。どのレベルでもリクエスト引数は記録されません — [ログと監査ストリーム](#ログと監査ストリーム)参照 |
@@ -377,7 +378,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 作り直して記録します：
 
 ```json
-{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/facts","kind":"connection_refused","tool":"check_stack"}
+{"time":"…","level":"ERROR","msg":"upstream fetch failed","service":"mcp","upstream":"/v1/changes","kind":"connection_refused","tool":"check_stack"}
 ```
 
 `MCP_LOG=debug` に上げると、これに加えてアップストリーム呼び出しごとに
@@ -467,7 +468,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 | 症状 | 確認 | 原因と対処 |
 |---|---|---|
 | ツール呼び出しがエラーを返し（`check_stack` はエラーの代わりにコンポーネントごとの `note` に `fetch failed: …`）、ログに `"msg":"upstream fetch failed"` と `kind: connection_refused`・`dns`・`timeout` | `kubectl logs deploy/ratatosk-mcp`（ローカルはクライアントの MCP ログ） | egress の遮断。`ratatosk.io:443` へのアウトバウンド HTTPS を許可するか、ミラーを立てて `RATATOSK_URL`（チャート：`ratatoskUrl`）で指定 |
-| ログに `"msg":"upstream rate limited"`、`status: 429` | 上と同じ | アップストリーム上限（毎分 60 リクエスト/IP）の超過。プロジェクトごとの `list_facts` ポーリングを `check_stack` 1 回にまとめ、しばらく待って再試行 |
+| ログに `"msg":"upstream rate limited"`、`status: 429` | 上と同じ | アップストリーム上限（毎分 60 リクエスト/IP）の超過。プロジェクトごとの `list_changes` ポーリングを `check_stack` 1 回にまとめ、しばらく待って再試行 |
 | HTTP クライアントが `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers` を受け取る | クライアントが送る `Mcp-Protocol-Version` ヘッダー | クライアントが MCP 2026-07-28 リビジョンを使っており、ステートフル HTTP モードはこれを拒否します。`--set statelessHttp=true`（環境変数：`MCP_HTTP_STATELESS=1`）を有効にしてください — エラー文の `StreamableHTTPOptions.Stateless` は同じスイッチの Go SDK 側の名前です |
 | kagent UI に `ratatosk-agent` が現れない | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | kagent CRD のないクラスタでは `kagent.enabled=true` のインストールが失敗します — 先に kagent をインストールしてください。マニフェスト経路は `namespace: kagent` がハードコードされているため、kagent を別のネームスペースに入れている場合はマニフェストの修正が必要です |
 | kagent でエージェントランタイムを Go ADK に変えると `ImagePullBackOff` | `kubectl describe pod` | このチャートとは無関係な、kagent 0.9.12 自体の既知の問題（[#2247]、0.9.12 以降で修正）：Go ADK イメージは `ghcr.io` にのみ公開されているのに、コントローラのデフォルトが廃止済みの `cr.kagent.dev` を指しています。回避策：kagent のインストールに `--set controller.agentImage.registry=ghcr.io` |

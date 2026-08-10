@@ -19,7 +19,7 @@ helm install ratatosk-mcp ./charts/ratatosk-mcp
 | `replicaCount` | `1` | Number of replicas; turn on `statelessHttp` before going above 1 |
 | `image.repository` | `ghcr.io/garlickim21/ratatosk-mcp` | Image |
 | `image.tag` | chart `appVersion` | Pin a specific server version |
-| `ratatoskUrl` | `https://ratatosk.io` | Upstream facts API; point at a mirror if you proxy egress |
+| `ratatoskUrl` | `https://ratatosk.io` | Upstream changes API; point at a mirror if you proxy egress |
 | `statelessHttp` | `false` | Serve HTTP without per-session state — needed for clients that use the 2026-07-28 MCP revision and for more than one replica |
 | `logLevel` | `""` (= info) | `MCP_LOG`: `debug`, `warn`, `error` also accepted; any other value silently falls back to info, and no level records request arguments |
 | `auditMode` | `""` (= off) | `MCP_AUDIT`: `metadata` records one line per tool call (argument names only), `full` adds argument values |
