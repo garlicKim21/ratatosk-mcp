@@ -147,7 +147,10 @@ func main() {
 			"into one entry, and same_matter_also_addressed_in names every other release on record that carried " +
 			"it. Branch-aware: a matter already fixed at or below the running version ON THE RUNNING BRANCH is " +
 			"excluded (the install has it), counted in note — so a backport visible on a newer branch is not " +
-			"reported as outstanding work. " +
+			"reported as outstanding work. Line-aware: a repository can publish separate products or channels " +
+			"(containerd api/, Flatcar lts vs stable, openfeature flagd vs core) and there is NO version order " +
+			"between lines, so only the line your version belongs to is compared — pass the tag as published, " +
+			"prefix included (\"flagd/v0.16.1\", \"lts-4081.3.9\"), or the wrong line is compared. " +
 			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user " +
 			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot " +
 			"verify a version or its source; a running version older than every release on record is flagged in note, " +
@@ -340,7 +343,7 @@ func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getRelea
 
 type stackComponent struct {
 	Project       string `json:"project" jsonschema:"project slug, e.g. envoy"`
-	Version       string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
+	Version       string `json:"version" jsonschema:"the version currently running, exactly as the project publishes it — keep any release-line prefix (flagd/v0.16.1, lts-4081.3.9, api/v1.11.1), since only that line is compared. e.g. v1.36.8"`
 	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination, strictly above the running version: only changes with running < version <= target are returned; a target at or below running would make that range empty and is ignored with a note"`
 	// VersionSource is an audit trail, never a check: this server cannot see the
 	// caller's environment and therefore cannot tell a real citation from an
@@ -560,11 +563,24 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		allOccurrences := occurrencesByMatter(changes)
 		unparseable := 0
 		settled := 0
+		offLine := 0
 		var relevant []Change
 		var keys [][]int
 		var oldest []int
 		var oldestTag string
 		for _, f := range changes {
+			// A release line is a separate product or channel published from the
+			// same repository — containerd's "api/" module, Flatcar's lts beside
+			// stable, openfeature's flagd beside core. Two lines have no order
+			// between them, so a version from another line is not "newer": it is
+			// not comparable at all. Gate before the key is even computed, or the
+			// comparison silently succeeds and offers an upgrade that is a
+			// different piece of software (observed live: containerd v1.7.28 was
+			// offered api/v1.11.0, 2026-08-10).
+			if !version.SameLine(comp.Version, f.Version) {
+				offLine++
+				continue
+			}
 			changeKey := version.NormalizeVersion(f.Version)
 			if changeKey == nil {
 				unparseable++
@@ -596,6 +612,11 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		}
 		if unparseable > 0 {
 			notes = append(notes, fmt.Sprintf("%d change(s) skipped (unparseable release tag)", unparseable))
+		}
+		if offLine > 0 {
+			notes = append(notes, fmt.Sprintf(
+				"%d change(s) from other release lines of this project were excluded — %q is line %q, and lines (separate products or channels published from one repository) have no version order between them",
+				offLine, comp.Version, lineLabel(version.Line(comp.Version))))
 		}
 		if settled > 0 {
 			notes = append(notes, fmt.Sprintf(
@@ -650,7 +671,9 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			"entry, and same_matter_also_addressed_in names every other release on record that carried it — " +
 			"expand it with get_matter(matter_key) to see which branch carries which advisories. " +
 			"A matter already fixed at or below the running version on the running branch is excluded and " +
-			"counted in note: the install already has it. " +
+			"counted in note: the install already has it. Changes from other release lines of the same " +
+			"project (separate products or channels — no version order between them) are excluded and " +
+			"counted in note too. " +
 			`Call again with detail:"full" for every change verbatim, or drill down: get_release(project, version) ` +
 			"for one release with evidence and source URL, changes_by_entity(name) for one CVE/flag/CRD."
 	}
@@ -834,6 +857,15 @@ func occurrencesByMatter(changes []Change) map[string][]string {
 		})
 	}
 	return out
+}
+
+// lineLabel names a release line for a human-facing note; the main line has no
+// prefix and needs a word rather than an empty string.
+func lineLabel(line string) string {
+	if line == "" {
+		return "main"
+	}
+	return line
 }
 
 // bucketRank orders buckets by urgency — action beats check beats plan.

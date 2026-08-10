@@ -167,7 +167,19 @@ for every component. Keep the measured response in the
    `applies_if_any` in place of `applies_if` when their conditions differ.
    Merged entries take the highest severity and the most urgent bucket of
    their members.
-8. **The briefing is branch-aware, and has to be.** Maintainers backport one
+8. **Only your release line is compared.** A repository can publish more than
+   one product or channel from the same tags: containerd ships `api/v1.11.1`
+   beside the runtime's `v2.2.5`, Flatcar ships `lts-4081.3.9` and
+   `stable-4593.2.4` in parallel, OpenFeature ships `core/`, `flagd/` and
+   `flagd-proxy/`. Asking which of two lines is newer is meaningless — and it
+   used to be answered anyway, offering a containerd v1.7.28 operator
+   `api/v1.11.0` as work to do. Changes from other lines are now dropped
+   before any comparison, counted in `note`. **Pass the tag as published,
+   prefix included** (`flagd/v0.16.1`, `lts-4081.3.9`): a bare `v0.16.1` reads
+   as the main line and will not match the flagd releases. Projects that
+   prefix every tag alike (knative-…, edge-…) resolve to one line and behave
+   exactly as before.
+9. **The briefing is branch-aware, and has to be.** Maintainers backport one
    fix onto every supported branch, so the same `matter_key` lands on v2.2.4
    and v2.3.1 on the same day. Reading only "releases newer than the running
    version" would show an operator on 2.2.5 the v2.3.1 occurrence and call it
@@ -177,7 +189,7 @@ for every component. Keep the measured response in the
    Branch equality is what makes that safe: a backport to v2.1.9 says nothing
    about v2.2.4, which was cut from a different branch and may never have
    received it, so only the running version's own branch counts as proof.
-9. **`note` — per-component state markers.** Two kinds appear:
+10. **`note` — per-component state markers.** Two kinds appear:
    `tracked:false` with "NOT tracked by ratatosk — zero changes means no
    coverage here, not safety", and "running version … is older than every
    release on record". The second is the only cross-check available on a
@@ -186,7 +198,7 @@ for every component. Keep the measured response in the
    resource. Absence of both markers, with `new_changes: 0`, is the quiet
    case — tracked, scanned, nothing above the running version. kubernetes in
    the measured response is that: 45 scanned, 0 new.
-10. **`hint` and `privacy`.** The `hint` restates the briefing as a data
+11. **`hint` and `privacy`.** The `hint` restates the briefing as a data
    classification rather than a recommendation and points to the next tools.
    The `privacy` line records how far your versions travelled in this call.
 

@@ -159,7 +159,17 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if 판정
    같은 변경들은 id를 함께 묶어 한 항목으로 합쳐지고, 조건이 서로 다르면
    `applies_if` 대신 `applies_if_any`가 붙습니다. 합쳐진 항목은 구성원 중
    가장 높은 심각도와 가장 급한 버킷을 따릅니다.
-8. **브리핑은 갈래를 압니다. 그래야만 합니다.** 메인테이너는 한 수정을
+8. **내 릴리스 라인만 비교합니다.** 한 저장소가 같은 태그 체계로 여러 제품·채널을
+   내보내는 일이 있습니다. containerd는 런타임의 `v2.2.5` 옆에 `api/v1.11.1`(Go
+   모듈)을, Flatcar는 `lts-4081.3.9`와 `stable-4593.2.4`를 나란히, OpenFeature는
+   `core/`·`flagd/`·`flagd-proxy/`를 냅니다. 두 라인 중 어느 쪽이 새것이냐는 물음은
+   뜻이 없는데, 전에는 그래도 답을 했습니다 — containerd v1.7.28 운영자에게
+   `api/v1.11.0`을 할 일로 내놓았죠. 이제 다른 라인의 변경은 비교 전에 빠지고
+   `note`에 몇 건인지 남습니다. **태그는 공개된 그대로, 접두사까지 넣어
+   주세요**(`flagd/v0.16.1`, `lts-4081.3.9`) — 그냥 `v0.16.1`은 메인 라인으로 읽혀
+   flagd 릴리스와 안 맞습니다. 모든 태그에 같은 접두사를 쓰는 프로젝트(knative-·
+   edge-)는 라인이 하나라 동작이 전과 같습니다.
+9. **브리핑은 갈래를 압니다. 그래야만 합니다.** 메인테이너는 한 수정을
    지원 중인 모든 갈래에 백포트하므로, 같은 `matter_key`가 같은 날 v2.2.4와
    v2.3.1에 함께 내려앉습니다. "실행 버전보다 새 릴리스"만 읽으면 2.2.5를
    쓰는 운영자에게 v2.3.1 항목을 보여 주며 `action_required`라고 말하게
@@ -169,7 +179,7 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if 판정
    안전하게 만듭니다. v2.1.9로의 백포트는 v2.2.4에 대해 아무것도 말해 주지
    않습니다 — 다른 갈래에서 갈라져 나왔고 그 수정을 영영 못 받았을 수도
    있으니까요. 그러니 증거가 되는 것은 실행 버전 자기 갈래뿐입니다.
-9. **`note` — 컴포넌트별 상태 표식.** 두 종류가 나옵니다. `tracked:false`와
+10. **`note` — 컴포넌트별 상태 표식.** 두 종류가 나옵니다. `tracked:false`와
    함께 붙는 "NOT tracked by ratatosk — zero changes means no coverage here,
    not safety", 그리고 "running version … is older than every release on
    record". 뒤엣것은 버전 주장에 대해 여기서 가능한 유일한 교차 확인입니다.
@@ -178,7 +188,7 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if 판정
    `new_changes: 0`이면 조용한 경우입니다. 추적 중이고, 훑었고, 실행 중인
    버전 위에 아무것도 없다는 뜻이죠. 실측 응답의 kubernetes가 그렇습니다 —
    45건을 훑고 새것 0건.
-10. **`hint`와 `privacy`.** `hint`는 이 브리핑이 권고가 아니라 데이터 분류라는
+11. **`hint`와 `privacy`.** `hint`는 이 브리핑이 권고가 아니라 데이터 분류라는
    점을 다시 말하고 다음에 쓸 도구를 가리킵니다. `privacy` 줄은 이번 호출에서
    당신의 버전이 어디까지 갔는지를 기록합니다.
 

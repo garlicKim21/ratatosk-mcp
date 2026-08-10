@@ -347,3 +347,30 @@ func TestBriefReportListsOccurrencesOutsideTheWindow(t *testing.T) {
 		t.Fatalf("also-addressed-in should name both sibling branches oldest-first, got %v", got)
 	}
 }
+
+// A release line is a separate product or channel published from one
+// repository. Two lines have no order between them, so a version from another
+// line is not "newer" — it is not comparable. When the comparison silently
+// succeeded, containerd v1.7.28 was offered api/v1.11.0, a Go module, as part
+// of its upgrade path (2026-08-10).
+func TestSameLineGatesTheUpgradePath(t *testing.T) {
+	cases := []struct {
+		name, running, candidate string
+		comparable               bool
+	}{
+		{"main line vs its own", "v1.7.28", "v2.2.5", true},
+		{"main line vs api module", "v1.7.28", "api/v1.11.0", false},
+		{"api module vs itself", "api/v1.11.0", "api/v1.11.1", true},
+		{"flatcar lts vs stable", "lts-4081.3.7", "stable-4593.2.4", false},
+		{"flatcar lts vs its own", "lts-4081.3.7", "lts-4081.3.9", true},
+		{"openfeature flagd vs core", "flagd/v0.16.0", "core/v0.16.1", false},
+		{"openfeature flagd vs its own", "flagd/v0.15.0", "flagd/v0.16.1", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := version.SameLine(c.running, c.candidate); got != c.comparable {
+				t.Fatalf("SameLine(%q, %q) = %v, want %v", c.running, c.candidate, got, c.comparable)
+			}
+		})
+	}
+}

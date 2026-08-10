@@ -3,6 +3,39 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [0.7.3] — 2026-08-10
+
+### A repository can publish more than one thing, and versions across them have no order
+
+containerd tags its Go API module `api/v1.11.1` beside the runtime's own
+`v2.2.5`. Flatcar ships `lts-4081.3.9` and `stable-4593.2.4` as parallel
+channels. OpenFeature publishes `core/`, `flagd/` and `flagd-proxy/` from one
+repository. Each of those is a separate release line, and asking which of two
+lines is "newer" is not a hard question — it is a meaningless one.
+
+`check_stack` was asking it anyway. An operator on containerd v1.7.28 was
+offered `api/v1.11.0` as part of their upgrade path: a Go library, presented
+as work to do on their container runtime. It parsed, so nothing complained.
+
+- **Only the line your running version belongs to is compared.** Everything
+  else is dropped before a key is even computed, and `note` says how many and
+  why. The line is read from the tag — the maintainer already wrote it there —
+  rather than kept in a hand-maintained prefix list. That list was itself the
+  bug this morning: `stable-` was on it and `lts-` was not, so Flatcar's entire
+  LTS train parsed to nothing and vanished from every range query.
+- **Projects that prefix every tag the same way are unaffected.** knative-v…,
+  edge-… and the like resolve to a single line for the whole project, so a
+  same-line comparison behaves exactly as before. Across the tracked corpus,
+  five projects out of seventy-five have more than one line.
+- **Pass the tag as published, prefix included** — `flagd/v0.16.1`,
+  `lts-4081.3.9`. A bare `v0.16.1` is read as the main line and will not find
+  the flagd releases.
+
+This is the counterpart to 0.7.1's branch awareness, and deliberately not an
+extension of it. A branch is an ordered position within one line, which is why
+"already fixed at or below" means something there. Lines have no order at all,
+so they are excluded from candidacy rather than compared and filtered.
+
 ## [0.7.2] — 2026-08-10
 
 ### The per-caller limit now actually engages behind a CDN

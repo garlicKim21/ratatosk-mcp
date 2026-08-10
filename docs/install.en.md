@@ -107,7 +107,7 @@ answering:
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.2"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.3"}}}
 ```
 
 With Claude Code, check the `claude mcp list` output:
@@ -164,10 +164,10 @@ laptop with Claude Code or Claude Desktop.
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.3
 ```
 
-In place of `0.7.2` you can use any
+In place of `0.7.3` you can use any
 [release tag](https://github.com/garlicKim21/ratatosk-mcp/releases), or
 `latest` to always track the newest release — see
 [Version pinning](#version-pinning).
@@ -183,7 +183,7 @@ Claude Desktop registers MCP servers through a config file
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.2"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.3"]
     }
   }
 }
@@ -208,7 +208,7 @@ Any MCP client that speaks stdio works the same way.
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.2 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.3 - ✔ Connected
 ```
 
 Then ask your agent:
@@ -258,7 +258,7 @@ One startup log line tells you the serving address and the upstream:
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.2"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.3"}
 ```
 
 To check health as well:
@@ -355,7 +355,7 @@ the [chart README](../charts/ratatosk-mcp/README.md).
 Running HTTP mode directly with Docker:
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.2
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.3
 ```
 
 ## Logs and the audit stream
@@ -392,7 +392,7 @@ Enable it with `MCP_AUDIT`:
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.2
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.3
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -476,7 +476,7 @@ nothing is recorded.
 ## Version pinning
 
 - **Container image**: built automatically for every release under its
-  version tag (e.g. `0.7.2`), multi-arch (`linux/amd64`, `linux/arm64`).
+  version tag (e.g. `0.7.3`), multi-arch (`linux/amd64`, `linux/arm64`).
   `latest` tracks the newest release — pin a version tag for reproducible
   deployments.
 - **Helm**: the chart is not published to a chart repository; you install
@@ -484,7 +484,7 @@ nothing is recorded.
   cloning:
 
   ```bash
-  git -C ratatosk-mcp checkout v0.7.2
+  git -C ratatosk-mcp checkout v0.7.3
   ```
 
   The image tag follows the chart's `appVersion` by default and can be
