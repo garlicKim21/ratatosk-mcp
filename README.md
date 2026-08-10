@@ -34,8 +34,8 @@ your own SDK agent — can connect. No account, no API key.
 
 **Hosted — nothing to install.** Register `https://ratatosk.io/mcp` as a
 remote MCP server in any client that supports remote connectors. The hosted
-endpoint shares one upstream rate-limit bucket (60 requests/minute) across
-all its users — for polling or CI workloads, self-host. With the Claude Code
+endpoint allows each caller 60 tool calls a minute, counted per caller rather
+than pooled — for polling or CI workloads, self-host. With the Claude Code
 CLI:
 
 ```bash
@@ -157,7 +157,7 @@ has none by design. Details in the [install guide](docs/install.en.md).
 
 This server is a thin client over the public REST API. If you would rather
 call it directly, `GET /v1` on ratatosk.io describes itself. No API key; rate
-limited at 60 requests per minute per IP.
+limited at 1200 requests per minute per IP.
 
 ## Data & terms
 

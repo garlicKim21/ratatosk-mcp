@@ -180,7 +180,6 @@ func TestConditionPhrase(t *testing.T) {
 	}
 }
 
-
 // A target at or below the running version defines an empty range — measured
 // agent runs sent exactly that and read the guaranteed zero as "no issues".
 // The guard must drop the field (so changes return) and say why in the note.

@@ -3,6 +3,41 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### Rate limits that hold up when several people share an endpoint
+
+The hosted endpoint reaches the upstream API over an internal network,
+deliberately bypassing the CDN and reverse proxy so that `/v1` paths — which
+carry project slugs and running versions — never reach an access log. The
+cost of that design turned out to be steeper than intended: with no
+forwarding header surviving the hop, the upstream could not tell hosted
+callers apart, so **every hosted user in the world shared one bucket of 60
+requests a minute**. A single fifteen-component `check_stack` ate a quarter
+of it, and what a caller saw when the bucket ran dry was not an error but a
+briefing with `fetch failed` quietly filling in for components.
+
+- **`MCP_RATE_LIMIT_PER_MIN` (chart: `rateLimitPerMin`), off by default.**
+  When set, each caller address gets its own budget of N tool calls a minute;
+  over it, `429` with `Retry-After`. This lives here rather than upstream on
+  purpose. Forwarding the caller address to the API would have fixed the
+  fairness and broken the separation that makes the hosted endpoint what it
+  is: the web tier currently *cannot* correlate who asked with what was
+  asked, because it never receives the who. A structural guarantee like that
+  survives a future careless log line; a policy one does not. This process
+  already receives the address from the reverse proxy and is the layer whose
+  job is to front many callers, so it is where fair-sharing belongs. The
+  address is a bucket key and nothing else — never logged, never sent
+  upstream, dropped when its window expires.
+- **Off is the default because the same binary is what people self-host**,
+  and a self-hosted server is single-tenant: limiting its one caller would
+  only get in the way.
+- **The upstream per-IP limit is now 1200 requests/minute** (was 60). One
+  tool call is not one request — `check_stack` costs one per component — and
+  the old figure was tight enough that ordinary stack questions brushed it.
+  Documentation across both languages now states the two limits in their own
+  units instead of implying they are the same number.
+
 ## [0.7.0] — 2026-08-10
 
 ### The change model, end to end

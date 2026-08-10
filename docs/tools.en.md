@@ -1025,10 +1025,18 @@ process, so if you self-host, running versions never leave your
 infrastructure. The full boundary and log handling are covered in
 ["How your component versions are handled" in the README](../README.md#how-your-component-versions-are-handled).
 
-The upstream public API is limited to 60 requests per minute per caller, and
-the hosted endpoint shares one caller budget across its users — bundle stack
-questions into one `check_stack` call instead of polling per project, and
-switch to self-hosting for heavy use.
+Two limits apply, in different units. The public API allows **1200 requests
+per minute per IP** — that is what a self-hosted server draws on. The hosted
+endpoint additionally allows **60 tool calls per minute per caller**, counted
+per caller rather than pooled.
+
+One tool call is not one request: every tool here costs a single upstream
+request except `check_stack`, which costs one per component (plus one more for
+each component that turns out to have no changes). A fifteen-component
+`check_stack` is therefore one tool call and roughly fifteen requests — still
+far cheaper than fifteen separate `list_changes` calls, which is the reason to
+bundle stack questions into one call rather than polling per project. For
+heavy or automated use, self-host.
 
 The data is AI-extracted from official release notes. Verify critical
 decisions against the `source_url` every change carries

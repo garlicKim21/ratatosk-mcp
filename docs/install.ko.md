@@ -114,10 +114,13 @@ ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
 - **SSE GET은 405**: 무상태 모드는 서버가 먼저 보내는 알림 스트림(GET으로
   여는 SSE)을 제공하지 않으므로 405 응답이 정상 동작입니다. 브라우저
   주소창으로 열면 안내 페이지(`/docs/mcp`)로 리다이렉트됩니다.
-- **적정 사용**: 호스팅 경로는 공유 버킷 하나를 씁니다 — 업스트림 공개
-  API의 IP당 분당 60요청 한도를 호스팅 이용자 전체가 함께 쓰는 버킷입니다.
-  직접 `/v1`을 호출하면 그 대신 자기 IP 몫의 한도를 받습니다. 폴링처럼
-  사용량이 많은 용도라면 설치형으로 전환하세요.
+- **적정 사용**: 호스팅 엔드포인트는 **호출자당 분당 도구 호출 60회**를
+  허용합니다. 전체가 나눠 쓰는 몫이 아니라 호출자 주소별로 세므로, 한 명이
+  바쁘다고 나머지가 굶지 않습니다. 넘기면 `Retry-After`가 붙은 `429`가
+  돌아옵니다. 도구 호출 1회가 API 요청 1회는 아닙니다 — `check_stack`은
+  컴포넌트 하나당 업스트림 요청 1회를 씁니다. 한도를 도구 호출 단위로
+  표현한 이유가 그것입니다. 직접 `/v1`을 호출하면 자기 IP 몫으로 분당
+  1200회를 받습니다. 폴링처럼 사용량이 많은 용도라면 설치형으로 전환하세요.
 
 ### 프라이버시 — 호스팅 엔드포인트가 기록하는 것
 
@@ -335,6 +338,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(꺼짐)* | `1`이면 세션 상태 없는 HTTP: `Mcp-Session-Id` 왕복이 없고, MCP 스펙 2026-07-28 리비전을 쓰는 최신 클라이언트를 HTTP로 받으려면 필요합니다. 레플리카 2개 이상 수평 확장에도 권장. 구형 클라이언트는 어느 쪽이든 동작합니다 |
 | `MCP_LOG` | `logLevel` | `info` | 허용값 `info`(기본)·`debug`·`warn`·`error` — 인식하지 못한 값은 경고 없이 `info`로 처리됩니다. `debug`는 업스트림 호출별 소요 시간을 추가하고, `warn`·`error`는 로그를 줄입니다. 어느 레벨에서도 요청 인자는 기록되지 않습니다 — [로그와 감사 스트림](#로그와-감사-스트림) 참조 |
 | `MCP_AUDIT` | `auditMode` | *(꺼짐)* | `metadata` 또는 `full` — 도구 호출 감사 스트림. [감사 스트림 켜기](#감사-스트림-켜기) 참조 |
+| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(꺼짐)* | 호출자당 분당 도구 호출 상한. 내가 통제하지 않는 호출자를 대신 받는 서버용입니다. 호출자 주소마다 몫을 따로 주므로 한 명이 바쁘다고 나머지가 굶지 않고, 넘기면 `Retry-After`가 붙은 `429`가 돌아옵니다. 주소는 창이 유지되는 동안의 메모리 버킷 키일 뿐이고 — 기록하지도, 상류로 보내지도 않습니다 — 앞단 리버스 프록시가 `X-Forwarded-For`를 넘겨줘야 합니다. 단일 이용자 설치라면 꺼 두세요 |
 
 docker로 HTTP 모드를 직접 띄우는 예:
 
@@ -445,7 +449,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 | 증상 | 확인 | 원인과 해결 |
 |---|---|---|
 | 도구 호출이 오류를 반환하고(`check_stack`은 오류 대신 컴포넌트별 `note`에 `fetch failed: …`), 로그에 `"msg":"upstream fetch failed"`와 `kind: connection_refused`·`dns`·`timeout` | `kubectl logs deploy/ratatosk-mcp` (로컬은 클라이언트의 MCP 로그) | egress 차단. `ratatosk.io:443` 아웃바운드 HTTPS를 허용하거나, 미러를 두고 `RATATOSK_URL`(차트: `ratatoskUrl`)로 지정 |
-| 로그에 `"msg":"upstream rate limited"`, `status: 429` | 위와 동일 | 업스트림 한도(분당 60요청/IP) 초과. 프로젝트별 `list_changes` 폴링 대신 `check_stack` 하나로 묶어 호출하고, 잠시 후 재시도 |
+| 로그에 `"msg":"upstream rate limited"`, `status: 429` | 위와 동일 | 업스트림 한도(분당 1200요청/IP) 초과. 프로젝트별 `list_changes` 폴링 대신 `check_stack` 하나로 묶어 호출하고, 잠시 후 재시도 |
 | HTTP 클라이언트가 `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers`를 받음 | 클라이언트가 보내는 `Mcp-Protocol-Version` 헤더 | 클라이언트가 MCP 2026-07-28 리비전을 쓰는데 상태 유지 HTTP 모드는 이를 거절합니다. `--set statelessHttp=true`(환경 변수: `MCP_HTTP_STATELESS=1`)를 켜세요 — 오류 메시지의 `StreamableHTTPOptions.Stateless`는 같은 스위치의 Go SDK 쪽 이름입니다 |
 | kagent UI에 `ratatosk-agent`가 나타나지 않음 | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | kagent CRD가 없는 클러스터에서는 `kagent.enabled=true` 설치가 실패합니다 — kagent를 먼저 설치하세요. 매니페스트 경로는 `namespace: kagent`가 하드코딩되어 있으므로 kagent를 다른 네임스페이스에 설치했다면 매니페스트를 수정해야 합니다 |
 | kagent에서 에이전트 런타임을 Go ADK로 바꾸면 `ImagePullBackOff` | `kubectl describe pod` | 이 차트와 무관한 kagent 0.9.12 자체의 알려진 문제([#2247], 0.9.12 이후 수정): Go ADK 이미지는 `ghcr.io`에만 발행되는데 컨트롤러 기본값이 폐기된 `cr.kagent.dev`를 가리킵니다. 우회: kagent 설치에 `--set controller.agentImage.registry=ghcr.io` |
@@ -472,7 +476,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 이 서버는 공개 REST API의 얇은 클라이언트입니다. 직접 호출하고 싶다면
 ratatosk.io의 `GET /v1`을 열어 보세요. 인덱스가 스스로를 설명합니다. API
-키는 없고, IP당 분당 60회 제한이 있습니다.
+키는 없고, IP당 분당 1200회 제한이 있습니다.
 
 ## 다음 단계
 

@@ -122,10 +122,13 @@ ratatosk: https://ratatosk.io/mcp (HTTP) - ✔ Connected
   notification stream (the SSE opened with GET), so a 405 response is normal
   behavior. Opening the URL in a browser redirects to an explainer page
   (`/docs/mcp`).
-- **Fair use**: the hosted path draws on one shared bucket — the upstream
-  public API's limit of 60 requests/minute per IP, shared by all hosted
-  users together. Calling `/v1` directly gives you your own per-IP allowance
-  instead. For heavy use such as polling, self-host.
+- **Fair use**: the hosted endpoint allows **60 tool calls per minute per
+  caller**, counted per caller address rather than pooled, so one busy caller
+  cannot starve the rest. Exceeding it returns `429` with `Retry-After`. Note
+  that one tool call is not one API request — `check_stack` costs one upstream
+  request per component — which is why the limit is expressed in tool calls.
+  Calling `/v1` directly instead gives you 1200 requests/minute against your
+  own IP. For heavy use such as polling, self-host.
 
 ### Privacy — what the hosted endpoint records
 
@@ -347,6 +350,7 @@ the [chart README](../charts/ratatosk-mcp/README.md).
 | `MCP_HTTP_STATELESS` | `statelessHttp` | *(off)* | `1` serves HTTP without session state: no `Mcp-Session-Id` round trip, and required to serve current clients that use the 2026-07-28 MCP spec revision over HTTP. Also recommended for horizontal scaling to two or more replicas. Older clients work either way |
 | `MCP_LOG` | `logLevel` | `info` | Accepted values `info` (default), `debug`, `warn`, `error` — unrecognized values fall back to `info` without a warning. `debug` adds per-call upstream timing; `warn` and `error` reduce output. No level records request arguments — see [Logs and the audit stream](#logs-and-the-audit-stream) |
 | `MCP_AUDIT` | `auditMode` | *(off)* | `metadata` or `full` — the tool-call audit stream. See [Enabling the audit stream](#enabling-the-audit-stream) |
+| `MCP_RATE_LIMIT_PER_MIN` | `rateLimitPerMin` | *(off)* | Per-caller ceiling on tool calls per minute, for a server that fronts callers you do not control. Each caller address gets its own budget, so one busy caller cannot starve the rest; over the limit answers `429` with `Retry-After`. The address is an in-memory bucket key for the length of the window — never logged, never sent upstream — and the reverse proxy in front must pass `X-Forwarded-For`. Leave off for a single-tenant install |
 
 Running HTTP mode directly with Docker:
 
@@ -461,7 +465,7 @@ nothing is recorded.
 | Symptom | Check | Cause and fix |
 |---|---|---|
 | Tool calls return errors (`check_stack` instead reports `fetch failed: …` in each component's `note`); the log shows `"msg":"upstream fetch failed"` with `kind: connection_refused`, `dns`, or `timeout` | `kubectl logs deploy/ratatosk-mcp` (locally: your client's MCP logs) | Egress is blocked. Allow outbound HTTPS to `ratatosk.io:443`, or set up a mirror and point `RATATOSK_URL` (chart: `ratatoskUrl`) at it |
-| The log shows `"msg":"upstream rate limited"`, `status: 429` | Same as above | Upstream limit exceeded (60 requests/minute per IP). Replace per-project `list_changes` polling with a single `check_stack` call, and retry after a pause |
+| The log shows `"msg":"upstream rate limited"`, `status: 429` | Same as above | Upstream limit exceeded (1200 requests/minute per IP). Replace per-project `list_changes` polling with a single `check_stack` call, and retry after a pause |
 | An HTTP client gets `400 Bad Request: protocol version "2026-07-28" is only supported on stateless HTTP servers` | The `Mcp-Protocol-Version` header the client sends | The client speaks the 2026-07-28 MCP revision, which stateful HTTP mode rejects. Turn on `--set statelessHttp=true` (env: `MCP_HTTP_STATELESS=1`) — the `StreamableHTTPOptions.Stateless` named in the error is the Go SDK's name for the same switch |
 | `ratatosk-agent` does not appear in the kagent UI | `kubectl api-resources \| grep kagent` · `kubectl get pods -n kagent` | Installing with `kagent.enabled=true` fails on a cluster without the kagent CRDs — install kagent first. The manifest route hardcodes `namespace: kagent`, so if kagent lives in another namespace, edit the manifests |
 | `ImagePullBackOff` after switching the kagent agent runtime to the Go ADK | `kubectl describe pod` | A known issue in kagent 0.9.12 itself, unrelated to this chart ([#2247], fixed after 0.9.12): the Go ADK image is published only to `ghcr.io` while the controller default points at the retired `cr.kagent.dev`. Workaround: `--set controller.agentImage.registry=ghcr.io` on the kagent install |
@@ -490,7 +494,7 @@ nothing is recorded.
 
 This server is a thin client over the public REST API. If you would rather
 call it directly, `GET /v1` on ratatosk.io describes itself. No API key; rate
-limited at 60 requests per minute per IP.
+limited at 1200 requests per minute per IP.
 
 ## Next steps
 

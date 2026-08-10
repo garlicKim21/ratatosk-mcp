@@ -39,6 +39,10 @@ spec:
             - name: MCP_AUDIT
               value: {{ .Values.auditMode | quote }}
 {{- end }}
+{{- if .Values.rateLimitPerMin }}
+            - name: MCP_RATE_LIMIT_PER_MIN
+              value: {{ .Values.rateLimitPerMin | quote }}
+{{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

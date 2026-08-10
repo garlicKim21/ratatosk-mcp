@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,12 +48,14 @@ func main() {
 			"bucket (action|check|plan — how to act NOW), and applies_if (a condition you evaluate against the running " +
 			"setup, structured into targets when the server could). Read bucket before severity: an 'action' entry " +
 			"applies to every install, a 'check' entry only to setups its applies_if matches. " +
-			"Upstream is rate-limited to 60 requests/minute per caller (a hosted endpoint shares one caller budget); " +
-			"prefer check_stack for stack-wide questions over polling list_changes per project.",
+			"Rate limits: the upstream API allows 1200 requests/minute per IP, and the hosted endpoint additionally " +
+			"allows each caller 60 tool calls/minute. One tool call is not one request — check_stack costs one " +
+			"upstream request per component — so prefer a single check_stack for stack-wide questions over polling " +
+			"list_changes per project.",
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "list_projects",
+		Name:        "list_projects",
 		Annotations: &mcp.ToolAnnotations{Title: "List tracked projects", ReadOnlyHint: true},
 		Description: "Every project ratatosk tracks: slug (the canonical id all other tools take), name, " +
 			"tier (graduated|incubating), category, analyzed_releases; image_aliases where a project runs " +
@@ -67,7 +70,7 @@ func main() {
 	}, listProjectsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "list_changes",
+		Name:        "list_changes",
 		Annotations: &mcp.ToolAnnotations{Title: "Sync release changes", ReadOnlyHint: true},
 		Description: "Incremental SYNC feed of release changes for CNCF/cloud-native projects. " +
 			"Ordered by seq ascending — OLDEST analyzed first, so a single page is NOT the newest data; " +
@@ -82,7 +85,7 @@ func main() {
 	}, listChangesTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "get_matter",
+		Name:        "get_matter",
 		Annotations: &mcp.ToolAnnotations{Title: "One matter across releases", ReadOnlyHint: true},
 		Description: "Every release in which one matter appeared, oldest first. Take matter_key verbatim from a " +
 			"change (case-sensitive, contains '/' and ':'). Use it to answer 'which version fixes this for MY " +
@@ -93,7 +96,7 @@ func main() {
 	}, getMatterTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "changes_by_entity",
+		Name:        "changes_by_entity",
 		Annotations: &mcp.ToolAnnotations{Title: "Changes touching one identifier", ReadOnlyHint: true},
 		Description: "Reverse index: every change touching one exact identifier — a CVE id, CRD, feature gate, " +
 			"flag, metric, config field, or dependency. Case-insensitive. " +
@@ -101,7 +104,7 @@ func main() {
 	}, changesByEntityTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "get_release",
+		Name:        "get_release",
 		Annotations: &mcp.ToolAnnotations{Title: "One reviewed release", ReadOnlyHint: true},
 		Description: "One reviewed release: envelope (summary, source URL, release URL) plus all its changes. " +
 			"changes=[] means the release was read and nothing operator-facing was recorded — auditable " +
@@ -116,7 +119,7 @@ func main() {
 	}, getReleaseTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "list_releases",
+		Name:        "list_releases",
 		Annotations: &mcp.ToolAnnotations{Title: "Recent releases of a project", ReadOnlyHint: true},
 		Description: "The newest N reviewed releases of one project, as light summaries (version, " +
 			"released/reviewed dates, changes_total, counts by bucket and by family, max advisory " +
@@ -127,7 +130,7 @@ func main() {
 	}, listReleasesTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "check_stack",
+		Name:        "check_stack",
 		Annotations: &mcp.ToolAnnotations{Title: "Check a running stack", ReadOnlyHint: true},
 		Description: "Check the user's running component versions against known changes. Versions are compared " +
 			"INSIDE THIS SERVER PROCESS — only project slugs are sent upstream, and this tool never calls the " +
@@ -142,10 +145,10 @@ func main() {
 			"The split comes from the server's bucket field, the SAME rule the website and the weekly email use. " +
 			"Repeat appearances of one matter_key (the same issue fixed on several release branches) collapse " +
 			"into one entry. " +
-			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user "+
-			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot "+
-			"verify a version or its source; a running version older than every release on record is flagged in note, "+
-			"which is the only cross-check available here. "+
+			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user " +
+			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot " +
+			"verify a version or its source; a running version older than every release on record is flagged in note, " +
+			"which is the only cross-check available here. " +
 			"Use detail:\"full\" for every change verbatim in relevant_changes (capped at 50 per component with " +
 			"relevant_changes_omitted — narrow with severity_min or target_version), " +
 			"target_version to limit to one upgrade hop, " +
@@ -172,8 +175,13 @@ func main() {
 		handler := mcp.NewStreamableHTTPHandler(
 			func(*http.Request) *mcp.Server { return server },
 			&mcp.StreamableHTTPOptions{Stateless: stateless})
+		// Per-caller limiting sits in front of the MCP handler, not upstream:
+		// this process is the one that can tell hosted callers apart, and the
+		// upstream API deliberately cannot (see ratelimit.go). Off by default,
+		// which is what a self-hosted single-tenant server wants.
+		rl := rateLimitFromEnv(os.Getenv("MCP_RATE_LIMIT_PER_MIN"))
 		mux := http.NewServeMux()
-		mux.Handle("/mcp", handler)
+		mux.Handle("/mcp", rateLimitMiddleware(rl, handler))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -181,7 +189,12 @@ func main() {
 		if stateless {
 			mode = "stateless"
 		}
-		slog.Info("listening", "transport", "http", "addr", addr+"/mcp", "mode", mode, "upstream", base, "version", buildVersion)
+		// The limit is a configured number, not a caller attribute — safe to log.
+		rateField := "off"
+		if rl != nil {
+			rateField = strconv.Itoa(rl.limit) + "/min per caller"
+		}
+		slog.Info("listening", "transport", "http", "addr", addr+"/mcp", "mode", mode, "upstream", base, "version", buildVersion, "rate_limit", rateField)
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			slog.Error("http server exited", "kind", errKind(err))
 			os.Exit(1)
@@ -371,28 +384,28 @@ type briefChange struct {
 func (b briefChange) conditional() bool { return b.Condition != "" || len(b.ConditionsAny) > 0 }
 
 type briefSummary struct {
-	NewChanges     int            `json:"new_changes"`
-	DistinctMatters int           `json:"distinct_matters"`
-	BySeverity     map[string]int `json:"by_severity"`
-	ByFamily       map[string]int `json:"by_family"`
-	ByBucket       map[string]int `json:"by_bucket"`
+	NewChanges      int            `json:"new_changes"`
+	DistinctMatters int            `json:"distinct_matters"`
+	BySeverity      map[string]int `json:"by_severity"`
+	ByFamily        map[string]int `json:"by_family"`
+	ByBucket        map[string]int `json:"by_bucket"`
 }
 
 type componentReport struct {
-	Project        string        `json:"project"`
-	RunningVersion string        `json:"running_version"`
-	VersionSource  string        `json:"version_source,omitempty"`
-	TargetVersion  string        `json:"target_version,omitempty"`
-	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-change components
-	Note           string        `json:"note,omitempty"`
-	ChangesScanned int           `json:"changes_scanned"`
-	Summary        *briefSummary `json:"summary,omitempty"`
-	ActionRequired []briefChange `json:"action_required,omitempty"`
-	CheckConfig    []briefChange `json:"check_config,omitempty"`
-	OtherChanges   []briefChange `json:"other_changes,omitempty"`
-	OtherOmitted   int           `json:"other_changes_omitted,omitempty"`
-	RelevantChanges []Change     `json:"relevant_changes,omitempty"` // detail:"full" only
-	RelevantOmitted int          `json:"relevant_changes_omitted,omitempty"`
+	Project         string        `json:"project"`
+	RunningVersion  string        `json:"running_version"`
+	VersionSource   string        `json:"version_source,omitempty"`
+	TargetVersion   string        `json:"target_version,omitempty"`
+	Tracked         *bool         `json:"tracked,omitempty"` // set only on zero-change components
+	Note            string        `json:"note,omitempty"`
+	ChangesScanned  int           `json:"changes_scanned"`
+	Summary         *briefSummary `json:"summary,omitempty"`
+	ActionRequired  []briefChange `json:"action_required,omitempty"`
+	CheckConfig     []briefChange `json:"check_config,omitempty"`
+	OtherChanges    []briefChange `json:"other_changes,omitempty"`
+	OtherOmitted    int           `json:"other_changes_omitted,omitempty"`
+	RelevantChanges []Change      `json:"relevant_changes,omitempty"` // detail:"full" only
+	RelevantOmitted int           `json:"relevant_changes_omitted,omitempty"`
 }
 
 // otherChangesCap bounds the one-liner tail of a brief report; whatever is cut
