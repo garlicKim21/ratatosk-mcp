@@ -107,7 +107,7 @@ JSON に `"serverInfo"` と `"name":"ratatosk"` が見えれば正常です：
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.6.2"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.0"}}}
 ```
 
 Claude Code なら `claude mcp list` の出力で確認してください：
@@ -159,10 +159,10 @@ stdio は、MCP クライアントがサーバーを子プロセスとして起�
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.2
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.0
 ```
 
-`0.6.2` の部分には任意の
+`0.7.0` の部分には任意の
 [リリースタグ](https://github.com/garlicKim21/ratatosk-mcp/releases)を
 指定できます。常に最新を追うなら `latest` を使ってください —
 [バージョン固定](#バージョン固定)参照。
@@ -178,7 +178,7 @@ Claude Desktop は CLI の代わりに設定ファイル
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.6.2"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.0"]
     }
   }
 }
@@ -204,7 +204,7 @@ stdio に対応した MCP クライアントであれば、いずれも同じ手
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.6.2 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.0 - ✔ Connected
 ```
 
 そのうえで、エージェントにこう聞いてみてください：
@@ -255,7 +255,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.6.2"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.0"}
 ```
 
 ヘルスチェックまで確認するなら：
@@ -357,7 +357,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 docker で HTTP モードを直接起動する例：
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.6.2
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.0
 ```
 
 ## ログと監査ストリーム
@@ -395,7 +395,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.6.2
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.0
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -478,7 +478,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 ## バージョン固定
 
-- **コンテナイメージ**：リリースごとにバージョンタグ（例：`0.6.2`）で自動
+- **コンテナイメージ**：リリースごとにバージョンタグ（例：`0.7.0`）で自動
   ビルドされ、マルチアーキテクチャ（`linux/amd64`、`linux/arm64`）です。
   `latest` は最新リリースを追います — 再現可能なデプロイにはバージョンタグを
   固定してください。
@@ -487,7 +487,7 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
   クローン後にリリースタグをチェックアウトしてください：
 
   ```bash
-  git -C ratatosk-mcp checkout v0.6.2
+  git -C ratatosk-mcp checkout v0.7.0
   ```
 
   イメージタグはデフォルトでチャートの `appVersion` に従い、`image.tag`

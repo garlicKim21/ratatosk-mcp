@@ -3,9 +3,14 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
-## [Unreleased]
+## [0.7.0] — 2026-08-10
 
 ### The change model, end to end
+
+**Upgrading:** two tools were renamed. `facts_by_entity` is now
+`changes_by_entity` and `list_facts` is now `list_changes`; a client that
+names the old ones will not find them. Allow-lists that enumerate tools (the
+kagent `toolNames` field, for one) need the new names plus `get_matter`.
 
 Ratatosk split its pipeline: what can be decided mechanically is now done
 mechanically, and the model is asked only for what needs judgment. The unit
