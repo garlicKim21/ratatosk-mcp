@@ -2,7 +2,7 @@
 //
 // Exposes the ratatosk agent API v1 as read-only MCP tools over stdio, plus
 // check_stack: the RFC's privacy loop ("notify, don't tell") — the caller's
-// running versions are compared LOCALLY against fact version keys; only
+// running versions are compared LOCALLY against change version keys; only
 // project slugs ever reach the server.
 //
 // Config: RATATOSK_URL (default https://ratatosk.io).
@@ -103,51 +103,55 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_release",
 		Annotations: &mcp.ToolAnnotations{Title: "One reviewed release", ReadOnlyHint: true},
-		Description: "One reviewed release: envelope (coverage, assessment, source URL) plus all its facts. " +
-			"facts=[] with coverage=full_reviewed means the release was read and is routine — auditable silence. " +
+		Description: "One reviewed release: envelope (summary, source URL, release URL) plus all its changes. " +
+			"changes=[] means the release was read and nothing operator-facing was recorded — auditable " +
+			"silence, not a gap. Each change carries family (security|breaking|deprecated), actionability, " +
+			"bucket (act now / check first / plan ahead), a machine-evaluable applies_if, cited advisories " +
+			"with CURRENT severity, and the verbatim quote it came from. by_bucket/by_family/max_severity " +
+			"summarize the same set; notes_total counts routine entries not shown individually. " +
 			"Omit version for the latest reviewed release of the project. " +
 			"version is accepted with or without the leading 'v' (projects disagree on the spelling); " +
 			"a wrong tag returns an error listing the project's recent reviewed tags — retry with one of those. " +
-			"Set include_raw for the original release note body (raw_notes); when the review is not the full story " +
-			"(coverage insufficient, or zero facts) raw_notes is included automatically.",
+			"Set include_raw for the original release note body (raw_notes).",
 	}, getReleaseTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_releases",
 		Annotations: &mcp.ToolAnnotations{Title: "Recent releases of a project", ReadOnlyHint: true},
-		Description: "The newest N reviewed releases of one project, as light summaries (version, date, " +
-			"coverage, fact counts by severity, max advisory-group severity). THE tool for " +
-			"'recent releases of X' / 'what changed in X lately' — newest first, unlike the " +
-			"list_facts sync feed which returns oldest-analyzed first. facts_total=0 with " +
-			"coverage=full_reviewed means the release was read and is routine (auditable silence). " +
-			"Drill into a row with get_release(project, version) for the full facts.",
+		Description: "The newest N reviewed releases of one project, as light summaries (version, " +
+			"released/reviewed dates, changes_total, counts by bucket and by family, max advisory " +
+			"severity, notes_total). THE tool for 'recent releases of X' / 'what changed in X lately' — " +
+			"newest first, unlike the list_changes sync feed which walks oldest-first by seq. " +
+			"changes_total=0 means the release was read and is routine (auditable silence). " +
+			"Drill into a row with get_release(project, version) for the full changes.",
 	}, listReleasesTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "check_stack",
 		Annotations: &mcp.ToolAnnotations{Title: "Check a running stack", ReadOnlyHint: true},
-		Description: "Check the user's running component versions against known facts. Versions are compared " +
+		Description: "Check the user's running component versions against known changes. Versions are compared " +
 			"INSIDE THIS SERVER PROCESS — only project slugs are sent upstream, and this tool never calls the " +
 			"server-side /v1/upgrade endpoint. Run the server yourself and running versions never leave your " +
 			"infrastructure; on the hosted endpoint they transit server memory only and are not logged. " +
-			"Returns, per component, the facts from releases NEWER than the running version (the upgrade path). " +
-			"Default is a briefing: summary counts, then critical/high facts split by whether the caller still has to " +
-			"check something — action_required applies to everyone, check_config applies only if its applies_if holds " +
-			"against the running configuration (resolve it before recommending; an unmet condition is not a reason to " +
-			"upgrade, it is a precondition for later — fixed_in is the minimum version to be on before enabling that " +
-			"feature). One line each for the rest, " +
-			"and the same advisory fixed on several release branches collapsed into one entry " +
-			"(shown at the advisory's group-maximum severity). " +
+			"Returns, per component, the changes from releases NEWER than the running version (the upgrade path). " +
+			"Default is a briefing: summary (new_changes, distinct_matters, by_severity, by_family, by_bucket), " +
+			"then the items split by what the caller must do — action_required applies to everyone, check_config " +
+			"applies only if its applies_if holds against the running configuration (resolve it before " +
+			"recommending; an unmet condition is not a reason to upgrade, it is a precondition for later — " +
+			"the entry's version is the minimum to be on before enabling that feature). " +
+			"The split comes from the server's bucket field, the SAME rule the website and the weekly email use. " +
+			"Repeat appearances of one matter_key (the same issue fixed on several release branches) collapse " +
+			"into one entry. " +
 			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user "+
 			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot "+
 			"verify a version or its source; a running version older than every release on record is flagged in note, "+
 			"which is the only cross-check available here. "+
-			"Use detail:\"full\" for every fact verbatim (capped at 50 per component with relevant_facts_omitted — narrow with severity_min or target_version), " +
+			"Use detail:\"full\" for every change verbatim in relevant_changes (capped at 50 per component with " +
+			"relevant_changes_omitted — narrow with severity_min or target_version), " +
 			"target_version to limit to one upgrade hop, " +
-			"severity_min to filter. Components with zero facts carry tracked:true|false — tracked:false means " +
-			"the project is NOT covered by ratatosk, so the absence of facts is no-coverage, not safety. " +
-			"In brief mode, facts sharing one quoted sentence are merged with their ids listed together. " +
-			"Drill down with get_release or facts_by_entity.",
+			"severity_min to filter. Components with zero changes carry tracked:true|false — tracked:false means " +
+			"the project is NOT covered by ratatosk, so the absence of changes is no-coverage, not safety. " +
+			"Drill down with get_release or changes_by_entity.",
 	}, checkStackTool)
 
 	// Audit stream (P3): observes tools/call when MCP_AUDIT is set; the
@@ -299,7 +303,7 @@ func listReleasesTool(ctx context.Context, req *mcp.CallToolRequest, args listRe
 type getReleaseArgs struct {
 	Project    string `json:"project" jsonschema:"project slug, e.g. envoy"`
 	Version    string `json:"version,omitempty" jsonschema:"release tag exactly as published, e.g. v1.38.3; omit for the latest reviewed release"`
-	IncludeRaw bool   `json:"include_raw,omitempty" jsonschema:"also return the original release note body as raw_notes — judge from the source instead of the extracted facts"`
+	IncludeRaw bool   `json:"include_raw,omitempty" jsonschema:"also return the original release note body as raw_notes — judge from the source instead of the extracted changes"`
 }
 
 func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getReleaseArgs) (*mcp.CallToolResult, any, error) {
@@ -321,7 +325,7 @@ func getReleaseTool(ctx context.Context, req *mcp.CallToolRequest, args getRelea
 type stackComponent struct {
 	Project       string `json:"project" jsonschema:"project slug, e.g. envoy"`
 	Version       string `json:"version" jsonschema:"the version currently running, e.g. v1.36.8"`
-	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination, strictly above the running version: only facts with running < version <= target are returned; a target at or below running would make that range empty and is ignored with a note"`
+	TargetVersion string `json:"target_version,omitempty" jsonschema:"optional upgrade destination, strictly above the running version: only changes with running < version <= target are returned; a target at or below running would make that range empty and is ignored with a note"`
 	// VersionSource is an audit trail, never a check: this server cannot see the
 	// caller's environment and therefore cannot tell a real citation from an
 	// invented one. What it buys is a machine-readable claim to compare against
@@ -331,13 +335,13 @@ type stackComponent struct {
 
 type checkStackArgs struct {
 	Components  []stackComponent `json:"components" jsonschema:"the running stack to check"`
-	SeverityMin string           `json:"severity_min,omitempty" jsonschema:"only facts at or above this severity: info|low|medium|high|critical"`
-	Detail      string           `json:"detail,omitempty" jsonschema:"brief (default): summary + critical/high facts + one-liners for the rest; full: every fact verbatim"`
+	SeverityMin string           `json:"severity_min,omitempty" jsonschema:"only changes at or above this severity: info|low|medium|high|critical"`
+	Detail      string           `json:"detail,omitempty" jsonschema:"brief (default): summary + the items to act on, split by bucket; full: every change verbatim"`
 }
 
 var severityRank = map[string]int{"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
-// briefChange is one upgrade-path fact compressed to what an agent decides on.
+// briefChange is one upgrade-path change compressed to what an agent decides on.
 // Evidence entities and URLs live one get_release call away.
 type briefChange struct {
 	ChangeID  string `json:"change_id"`
@@ -379,7 +383,7 @@ type componentReport struct {
 	RunningVersion string        `json:"running_version"`
 	VersionSource  string        `json:"version_source,omitempty"`
 	TargetVersion  string        `json:"target_version,omitempty"`
-	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-fact components
+	Tracked        *bool         `json:"tracked,omitempty"` // set only on zero-change components
 	Note           string        `json:"note,omitempty"`
 	ChangesScanned int           `json:"changes_scanned"`
 	Summary        *briefSummary `json:"summary,omitempty"`
@@ -392,17 +396,17 @@ type componentReport struct {
 }
 
 // otherChangesCap bounds the one-liner tail of a brief report; whatever is cut
-// is counted in other_facts_omitted — never dropped silently.
+// is counted in other_changes_omitted — never dropped silently.
 const otherChangesCap = 100
 
 // relevantChangesCap bounds a detail:"full" component — a long upgrade path can
 // otherwise be tens of thousands of tokens (observed: envoy v1.36.0→latest,
-// 75 facts ≈ 73 KB). The cut is counted in relevant_facts_omitted — never
+// 75 changes ≈ 73 KB). The cut is counted in relevant_changes_omitted — never
 // silent; agents narrow with severity_min/target_version or drill down.
 const relevantChangesCap = 50
 
 // coverageNote flags a running version that sits below every release we hold a
-// fact for. It is the one cross-check this server can make on a claim about an
+// change for. It is the one cross-check this server can make on a claim about an
 // environment it cannot see, and it catches two different things with the same
 // sentence: a genuinely ancient install, where a briefing drawn from the
 // reviewed window is not the whole upgrade path, and a version that was never
@@ -414,7 +418,7 @@ func coverageNote(running string, runningKey, oldest []int, oldestTag string) st
 		return ""
 	}
 	return fmt.Sprintf(
-		"running version %s is older than every release on record (earliest with facts: %s) — "+
+		"running version %s is older than every release on record (earliest on record: %s) — "+
 			"this covers the reviewed window only, so treat it as partial, and re-check that the "+
 			"running version was read off a live resource",
 		running, oldestTag)
@@ -450,7 +454,7 @@ func confessionNote(src string) string {
 // resolveTarget parses target_version against the running version. A target
 // at or below running asks for the range (running, target], which is empty by
 // construction — in measurement, five of twenty agent runs sent exactly
-// running-as-target and read the guaranteed zero facts as "no issues". An
+// running-as-target and read the guaranteed zero changes as "no issues". An
 // empty-by-construction range is therefore refused loudly (field ignored,
 // note says why and teaches the intended use) instead of honored silently.
 func resolveTarget(currentKey []int, targetRaw string) ([]int, string) {
@@ -502,7 +506,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		var notes []string
 		currentKey := version.NormalizeVersion(comp.Version)
 		if currentKey == nil {
-			rep.Note = "running version could not be parsed; showing no facts (use list_facts to inspect manually)"
+			rep.Note = "running version could not be parsed; showing no changes (use list_changes to inspect manually)"
 			reports = append(reports, rep)
 			continue
 		}
@@ -510,25 +514,25 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		if targetNote != "" {
 			notes = append(notes, targetNote)
 		}
-		facts, err := api.allProjectChanges(ctx, comp.Project)
+		changes, err := api.allProjectChanges(ctx, comp.Project)
 		if err != nil {
 			rep.Note = "fetch failed: " + err.Error()
 			reports = append(reports, rep)
 			continue
 		}
-		rep.ChangesScanned = len(facts)
-		// Zero facts is ambiguous: audited silence (tracked, routine releases)
+		rep.ChangesScanned = len(changes)
+		// Zero changes is ambiguous: audited silence (tracked, routine releases)
 		// or no coverage at all (unknown slug). Probe and say which — an agent
 		// must never read "not tracked" as "safe" (2026-07-23 kagent finding).
-		if len(facts) == 0 {
+		if len(changes) == 0 {
 			if tracked, perr := api.projectTracked(ctx, comp.Project); perr != nil {
 				notes = append(notes, "tracking probe failed: "+perr.Error())
 			} else {
 				rep.Tracked = &tracked
 				if tracked {
-					notes = append(notes, "tracked by ratatosk; no facts on record — releases so far were routine")
+					notes = append(notes, "tracked by ratatosk; no changes on record — releases so far were routine")
 				} else {
-					notes = append(notes, "NOT tracked by ratatosk — zero facts means no coverage here, not safety")
+					notes = append(notes, "NOT tracked by ratatosk — zero changes means no coverage here, not safety")
 				}
 			}
 		}
@@ -540,29 +544,29 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		var keys [][]int
 		var oldest []int
 		var oldestTag string
-		for _, f := range facts {
-			factKey := version.NormalizeVersion(f.Version)
-			if factKey == nil {
+		for _, f := range changes {
+			changeKey := version.NormalizeVersion(f.Version)
+			if changeKey == nil {
 				unparseable++
 				continue
 			}
-			if oldest == nil || version.Compare(factKey, oldest) < 0 {
-				oldest, oldestTag = factKey, f.Version
+			if oldest == nil || version.Compare(changeKey, oldest) < 0 {
+				oldest, oldestTag = changeKey, f.Version
 			}
-			if version.Compare(factKey, currentKey) <= 0 {
+			if version.Compare(changeKey, currentKey) <= 0 {
 				continue
 			}
-			if targetKey != nil && version.Compare(factKey, targetKey) > 0 {
+			if targetKey != nil && version.Compare(changeKey, targetKey) > 0 {
 				continue
 			}
 			if severityRank[strings.ToLower(f.EffSeverity())] < minRank {
 				continue
 			}
 			relevant = append(relevant, f)
-			keys = append(keys, factKey)
+			keys = append(keys, changeKey)
 		}
 		if unparseable > 0 {
-			notes = append(notes, fmt.Sprintf("%d fact(s) skipped (unparseable release tag)", unparseable))
+			notes = append(notes, fmt.Sprintf("%d change(s) skipped (unparseable release tag)", unparseable))
 		}
 		if n := coverageNote(comp.Version, currentKey, oldest, oldestTag); n != "" {
 			notes = append(notes, n)
@@ -597,17 +601,17 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		"privacy":    "versions were compared locally; only project slugs were sent to the server",
 	}
 	if !full {
-		out["hint"] = "briefing (a data classification, not a recommendation — facts are provided without warranty and " +
+		out["hint"] = "briefing (a data classification, not a recommendation — changes are provided without warranty and " +
 			"the decision stays with the operator): action_required = critical/high that applies to every install of this version. " +
 			"check_config = critical/high that applies ONLY IF applies_if holds — read the running configuration and " +
 			"decide before you recommend anything; an unmet condition is not an upgrade reason. Report an unmet one " +
-			"forward instead: fixed_in is the minimum version to be on BEFORE enabling what applies_if describes. " +
-			"applies_if_target names the thing to look for when the server stored it structurally. The rest is one " +
-			"line each in other_facts; facts sharing one quoted sentence are merged (ids listed together, " +
-			"applies_if_any when conditions differ); the same advisory fixed on several release branches is one " +
-			"entry (same_issue_also_addressed_in). " +
-			`Call again with detail:"full" for every fact verbatim, or drill down: get_release(project, version) ` +
-			"for one release with evidence and source URL, facts_by_entity(name) for one CVE/flag/CRD."
+			"forward instead: this entry's version is the minimum to be on BEFORE enabling what applies_if describes. " +
+			"applies_if_targets names the things to look for when the server stored the condition structurally. The rest is one " +
+			"line each in other_changes; changes on the same matter_key are merged (ids listed together, " +
+			"applies_if_any when conditions differ); one matter fixed on several release branches is one " +
+			"entry (same_matter_also_addressed_in). " +
+			`Call again with detail:"full" for every change verbatim, or drill down: get_release(project, version) ` +
+			"for one release with evidence and source URL, changes_by_entity(name) for one CVE/flag/CRD."
 	}
 	res, err := jsonResult(out)
 	return res, nil, err
