@@ -21,7 +21,14 @@ NS=kagent
 PORT=18099
 
 # main.go is the source of truth for what tools exist.
-TOOLS="$(grep -oE '^\s*Name: "[a-z_]+"' main.go | grep -oE '"[a-z_]+"' | tr -d '"' | sort)"
+# The spacing after "Name:" is gofmt's business, not ours: it aligns struct
+# fields, so a single-space pattern silently matched nothing the first time a
+# field longer than "Name" joined the literal. With set -e that exits 1 before
+# printing anything, which reads as an install failure rather than a broken
+# regex (v0.7.1, 2026-08-10). Match any run of whitespace, and refuse to
+# continue on an empty list instead of rehearsing against nothing.
+TOOLS="$(grep -oE '^[[:space:]]*Name:[[:space:]]+"[a-z_]+"' main.go | grep -oE '"[a-z_]+"' | tr -d '"' | sort)"
+[ -n "$TOOLS" ] || { echo "  ✗ no tool names found in main.go — the extraction pattern is stale, not the build" >&2; exit 1; }
 
 pass() { echo "  ✓ $*"; }
 fail() { echo "  ✗ $*" >&2; exit 1; }
