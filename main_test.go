@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -372,5 +373,47 @@ func TestSameLineGatesTheUpgradePath(t *testing.T) {
 				t.Fatalf("SameLine(%q, %q) = %v, want %v", c.running, c.candidate, got, c.comparable)
 			}
 		})
+	}
+}
+
+// Agents read versions off image tags, and image tags rarely carry the
+// release-line prefix. knative publishes "knative-v1.12.0" while its images
+// say "v1.12.0": every release would land on the other side of the line gate
+// and the briefing would read as "nothing to do". Say so instead.
+func TestLinesPresentAndExampleTag(t *testing.T) {
+	changes := []Change{
+		ch("a", "flagd/v0.16.1", "removed", "breaking", "check", "m/1"),
+		ch("b", "core/v0.15.0", "removed", "breaking", "check", "m/2"),
+		ch("c", "flagd/v0.15.7", "removed", "breaking", "check", "m/3"),
+	}
+	lines := linesPresent(changes)
+	if len(lines) != 2 || lines[0] != "core" || lines[1] != "flagd" {
+		t.Fatalf("linesPresent = %v, want [core flagd] sorted", lines)
+	}
+	if got := exampleTag(changes, "flagd"); got != "flagd/v0.16.1" {
+		t.Fatalf("exampleTag should show a real tag from the line, got %q", got)
+	}
+	if got := lineList(lines); got != `lines "core", "flagd"` {
+		t.Fatalf("lineList = %q", got)
+	}
+	if got := lineList([]string{""}); got != `only line "main"` {
+		t.Fatalf("a single main line should read naturally, got %q", got)
+	}
+}
+
+// The single-line case matters as much as the multi-line one: linkerd and
+// knative each publish exactly one line, and it is a prefixed one, so a bare
+// version matches nothing at all.
+func TestSinglePrefixedLineIsStillADroppedPrefix(t *testing.T) {
+	changes := []Change{
+		ch("a", "knative-v1.12.0", "removed", "breaking", "check", "m/1"),
+		ch("b", "knative-v1.13.0", "removed", "breaking", "check", "m/2"),
+	}
+	lines := linesPresent(changes)
+	if len(lines) != 1 || lines[0] != "knative" {
+		t.Fatalf("linesPresent = %v, want [knative]", lines)
+	}
+	if slices.Contains(lines, version.Line("v1.12.0")) {
+		t.Fatal("a bare v1.12.0 is the main line, which this project never publishes — the note must fire")
 	}
 }

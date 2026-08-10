@@ -3,6 +3,25 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### A version whose line does not exist is a dropped prefix, not an empty answer
+
+Agents read versions off image tags, and an image tag rarely carries the
+release-line prefix. knative publishes `knative-v1.12.0` while its images say
+`v1.12.0`, so every one of that project's releases lands on the other side of
+0.7.3's line gate and the briefing reads as "nothing to do".
+
+This is not confined to projects with several lines. A project with exactly
+one line still has the problem when that line is a prefixed one — across the
+tracked corpus five projects publish no main-line release at all
+(cloudevents, flatcar, knative, linkerd, openfeature).
+
+`check_stack` now says so: when the running version's line does not exist for
+that project, `note` names the lines that do and shows a real tag to copy the
+shape from. Projects whose main line genuinely exists — containerd, wasmcloud
+— are unaffected, so the warning does not cry wolf.
+
 ## [0.7.3] — 2026-08-10
 
 ### A repository can publish more than one thing, and versions across them have no order

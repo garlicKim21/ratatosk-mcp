@@ -618,6 +618,18 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 				"%d change(s) from other release lines of this project were excluded — %q is line %q, and lines (separate products or channels published from one repository) have no version order between them",
 				offLine, comp.Version, lineLabel(version.Line(comp.Version))))
 		}
+		// A version whose line does not exist here is almost always a dropped
+		// prefix, not a real gap. Agents read versions off image tags, and an
+		// image tag rarely carries the release-line prefix: knative publishes
+		// "knative-v1.12.0" while its images say "v1.12.0", and every one of
+		// that project's releases would fall on the other side of the line
+		// gate. Silence would look like "nothing to do" (hub question,
+		// 2026-08-10).
+		if lines := linesPresent(changes); len(lines) > 0 && !slices.Contains(lines, version.Line(comp.Version)) {
+			notes = append(notes, fmt.Sprintf(
+				"no releases on record for line %s — this project publishes %s. If the version came from an image tag, the release-line prefix was probably dropped: pass the tag as the project publishes it (e.g. %s)",
+				lineLabel(version.Line(comp.Version)), lineList(lines), exampleTag(changes, lines[0])))
+		}
 		if settled > 0 {
 			notes = append(notes, fmt.Sprintf(
 				"%d change(s) on newer branches were excluded: the same matter is already fixed at or below %s on your branch — expand any matter_key with get_matter to see every branch",
@@ -857,6 +869,45 @@ func occurrencesByMatter(changes []Change) map[string][]string {
 		})
 	}
 	return out
+}
+
+// linesPresent lists the release lines this project actually publishes, in a
+// stable order so the note reads the same twice.
+func linesPresent(changes []Change) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range changes {
+		l := version.Line(c.Version)
+		if !seen[l] {
+			seen[l] = true
+			out = append(out, l)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// lineList renders the available lines for a human: "lines \"core\", \"flagd\"".
+func lineList(lines []string) string {
+	quoted := make([]string, len(lines))
+	for i, l := range lines {
+		quoted[i] = strconv.Quote(lineLabel(l))
+	}
+	if len(quoted) == 1 {
+		return "only line " + quoted[0]
+	}
+	return "lines " + strings.Join(quoted, ", ")
+}
+
+// exampleTag returns a real tag from the given line, so the note shows the
+// shape the caller should have sent rather than describing it.
+func exampleTag(changes []Change, line string) string {
+	for _, c := range changes {
+		if version.Line(c.Version) == line {
+			return c.Version
+		}
+	}
+	return ""
 }
 
 // lineLabel names a release line for a human-facing note; the main line has no
