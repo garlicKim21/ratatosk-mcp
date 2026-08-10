@@ -39,7 +39,7 @@ func TestBriefReportCollapsesMatterToEarliestFix(t *testing.T) {
 		ch("c219", "v1.36.9", "removed", "breaking", "check", "m/cap-1"),
 		ch("c300", "v1.37.0", "default_changed", "breaking", "plan", "m/def-1"),
 	}
-	sum, action, check, other := briefReport(cs, keysOf(cs))
+	sum, action, check, other := briefReport(cs, keysOf(cs), occurrencesByMatter(cs))
 
 	if sum.NewChanges != 5 || sum.DistinctMatters != 3 {
 		t.Fatalf("summary: got new=%d distinct=%d, want 5/3", sum.NewChanges, sum.DistinctMatters)
@@ -67,7 +67,7 @@ func TestBriefReportSplitsByBucketNotSeverity(t *testing.T) {
 		ch("c1", "v1.36.9", "defect_corrected", "security", "check", "m/a", crit),
 		ch("c2", "v1.37.5", "value_changed", "breaking", "action", "m/b"),
 	}
-	_, action, check, _ := briefReport(cs, keysOf(cs))
+	_, action, check, _ := briefReport(cs, keysOf(cs), occurrencesByMatter(cs))
 	if len(check) != 1 || check[0].ChangeID != "c1" {
 		t.Fatalf("critical but conditional must stay in check_config: %+v", check)
 	}
@@ -84,7 +84,7 @@ func TestBriefReportTakesHighestAdvisorySeverity(t *testing.T) {
 		ch("c11", "v1.37.5", "defect_corrected", "security", "action", "m/g1",
 			Advisory{ID: "CVE-a", Severity: "high"}, Advisory{ID: "CVE-b", Severity: "critical"}),
 	}
-	_, action, _, _ := briefReport(cs, keysOf(cs))
+	_, action, _, _ := briefReport(cs, keysOf(cs), occurrencesByMatter(cs))
 	if len(action) != 1 {
 		t.Fatalf("one matter → one entry, got %d", len(action))
 	}
@@ -262,5 +262,88 @@ func TestCheckStackIgnoresSelfNullifyingTarget(t *testing.T) {
 	}
 	if !strings.Contains(c.Note, "empty by construction") {
 		t.Errorf("note %q must explain the ignored target", c.Note)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Branch awareness (2026-08-10 hub report)
+// ---------------------------------------------------------------------------
+
+// The live defect: an operator on containerd 2.2.5 was told to act on
+// CVE-2026-46680 and CVE-2026-47262, both of which their own branch had
+// already closed (v2.2.4 and v2.2.5). check_stack looked only at releases
+// newer than the running version, so it saw the v2.3.x backports and nothing
+// else.
+func TestAddressedOnRunningBranchFindsBackportsAtOrBelowRunning(t *testing.T) {
+	changes := []Change{
+		ch("a", "v2.3.1", "defect_corrected", "security", "action", "containerd/advisory:cve-46680"),
+		ch("b", "v2.2.4", "defect_corrected", "security", "action", "containerd/advisory:cve-46680"),
+		ch("c", "v2.3.2", "defect_corrected", "security", "action", "containerd/advisory:cve-47262"),
+		ch("d", "v2.2.5", "defect_corrected", "security", "action", "containerd/advisory:cve-47262"),
+	}
+	got := addressedOnRunningBranch(changes, version.NormalizeVersion("2.2.5"))
+	if got["containerd/advisory:cve-46680"] != "v2.2.4" {
+		t.Fatalf("46680 should be settled by v2.2.4, got %q", got["containerd/advisory:cve-46680"])
+	}
+	if got["containerd/advisory:cve-47262"] != "v2.2.5" {
+		t.Fatalf("47262 should be settled by the running version itself, got %q", got["containerd/advisory:cve-47262"])
+	}
+}
+
+// The opposite direction must keep working: one branch below the fix still
+// has work to do, and a sibling branch's backport proves nothing about it.
+func TestAddressedOnRunningBranchDoesNotOverReach(t *testing.T) {
+	changes := []Change{
+		ch("a", "v2.2.4", "defect_corrected", "security", "action", "m/one"),
+		ch("b", "v2.1.9", "defect_corrected", "security", "action", "m/two"),
+		ch("c", "v2.3.2", "defect_corrected", "security", "action", "m/two"),
+	}
+	got := addressedOnRunningBranch(changes, version.NormalizeVersion("2.2.3"))
+	if _, ok := got["m/one"]; ok {
+		t.Fatal("v2.2.4 is above 2.2.3 — the fix is not in yet, so it must not be treated as settled")
+	}
+	if _, ok := got["m/two"]; ok {
+		t.Fatal("v2.1.9 sits on another branch — it says nothing about what 2.2.3 contains")
+	}
+}
+
+func TestSameBranch(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"v2.2.5", "v2.2.4", true},
+		{"v2.2.5", "v2.3.1", false},
+		{"v2.2.5", "v1.2.5", false},
+		{"v1.20.0", "v1.20.7", true},
+		{"v1.19.6", "v1.20.0", false},
+		{"3", "3", false}, // too short to name a branch — answer conservatively
+	}
+	for _, c := range cases {
+		if got := sameBranch(version.NormalizeVersion(c.a), version.NormalizeVersion(c.b)); got != c.want {
+			t.Fatalf("sameBranch(%s, %s) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+// same_matter_also_addressed_in used to list only the versions that fell
+// inside the returned window, which excluded the running operator's own
+// branch — the one they most needed to see.
+func TestBriefReportListsOccurrencesOutsideTheWindow(t *testing.T) {
+	window := []Change{
+		ch("c", "v2.3.2", "defect_corrected", "security", "action", "m/roll"),
+	}
+	all := []Change{
+		window[0],
+		ch("d", "v2.2.5", "defect_corrected", "security", "action", "m/roll"),
+		ch("e", "v1.7.33", "defect_corrected", "security", "action", "m/roll"),
+	}
+	_, action, _, _ := briefReport(window, keysOf(window), occurrencesByMatter(all))
+	if len(action) != 1 {
+		t.Fatalf("want 1 action entry, got %d", len(action))
+	}
+	got := action[0].AlsoIn
+	if len(got) != 2 || got[0] != "v1.7.33" || got[1] != "v2.2.5" {
+		t.Fatalf("also-addressed-in should name both sibling branches oldest-first, got %v", got)
 	}
 }

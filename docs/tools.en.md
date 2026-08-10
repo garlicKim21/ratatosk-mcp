@@ -159,14 +159,25 @@ for every component. Keep the measured response in the
    own severities.
 7. **Two merge rules, both visible in the measured response.** Changes
    sharing a `matter_key` across release branches collapse into the earliest
-   fix, with the others listed in `same_matter_also_addressed_in` — an
-   operator upgrades once, so the nearest release that closes the matter is
-   the actionable one. Separately, changes sharing one quoted sentence
-   *within* a release merge into a single entry with their ids listed
-   together, and with `applies_if_any` in place of `applies_if` when their
-   conditions differ. Merged entries take the highest severity and the most
-   urgent bucket of their members.
-8. **`note` — per-component state markers.** Two kinds appear:
+   fix, with every other release that carried it — inside the window or not —
+   listed in `same_matter_also_addressed_in`. An operator upgrades once, so
+   the nearest release that closes the matter is the actionable one.
+   Separately, changes sharing one quoted sentence *within* a release merge
+   into a single entry with their ids listed together, and with
+   `applies_if_any` in place of `applies_if` when their conditions differ.
+   Merged entries take the highest severity and the most urgent bucket of
+   their members.
+8. **The briefing is branch-aware, and has to be.** Maintainers backport one
+   fix onto every supported branch, so the same `matter_key` lands on v2.2.4
+   and v2.3.1 on the same day. Reading only "releases newer than the running
+   version" would show an operator on 2.2.5 the v2.3.1 occurrence and call it
+   `action_required` — work on something their own branch closed a release
+   ago. A matter already fixed **at or below the running version on the
+   running branch** is therefore excluded, and `note` says how many were.
+   Branch equality is what makes that safe: a backport to v2.1.9 says nothing
+   about v2.2.4, which was cut from a different branch and may never have
+   received it, so only the running version's own branch counts as proof.
+9. **`note` — per-component state markers.** Two kinds appear:
    `tracked:false` with "NOT tracked by ratatosk — zero changes means no
    coverage here, not safety", and "running version … is older than every
    release on record". The second is the only cross-check available on a
@@ -175,7 +186,7 @@ for every component. Keep the measured response in the
    resource. Absence of both markers, with `new_changes: 0`, is the quiet
    case — tracked, scanned, nothing above the running version. kubernetes in
    the measured response is that: 45 scanned, 0 new.
-9. **`hint` and `privacy`.** The `hint` restates the briefing as a data
+10. **`hint` and `privacy`.** The `hint` restates the briefing as a data
    classification rather than a recommendation and points to the next tools.
    The `privacy` line records how far your versions travelled in this call.
 

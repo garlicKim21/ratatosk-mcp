@@ -47,10 +47,10 @@ Docker, the Helm chart, or a source build. With Claude Code and Docker
 installed:
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.0
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
 ```
 
-`0.7.0` is the current release; use `latest` to follow new ones.
+`0.7.1` is the current release; use `latest` to follow new ones.
 
 Either way, verify the connection:
 

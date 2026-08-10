@@ -100,7 +100,7 @@ curl -s -X POST https://ratatosk.io/mcp \
 
 ```
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.0"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{…,"serverInfo":{"name":"ratatosk","version":"0.7.1"}}}
 ```
 
 Claude Code라면 `claude mcp list` 출력에서 확인하세요:
@@ -153,10 +153,10 @@ stdio는 MCP 클라이언트가 서버를 자식 프로세스로 띄우고 표�
 ### Claude Code
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.0
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1
 ```
 
-`0.7.0` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
+`0.7.1` 자리에는 원하는 [릴리스 태그](https://github.com/garlicKim21/ratatosk-mcp/releases)를
 쓰면 되고, 항상 최신을 따라가려면 `latest`를 쓰세요 —
 [버전 고정](#버전-고정) 참조.
 
@@ -170,7 +170,7 @@ Claude Desktop은 CLI 대신 설정 파일(`claude_desktop_config.json`)로 MCP
   "mcpServers": {
     "ratatosk": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.0"]
+      "args": ["run", "-i", "--rm", "ghcr.io/garlickim21/ratatosk-mcp:0.7.1"]
     }
   }
 }
@@ -195,7 +195,7 @@ stdio를 지원하는 MCP 클라이언트라면 무엇이든 같은 방식입니
 
 ```bash
 claude mcp list
-# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.0 - ✔ Connected
+# ratatosk: docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.1 - ✔ Connected
 ```
 
 그리고 에이전트에게 이렇게 물어보세요:
@@ -245,7 +245,7 @@ kubectl get pods -l app.kubernetes.io/name=ratatosk-mcp
 
 ```bash
 kubectl logs deploy/ratatosk-mcp
-# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.0"}
+# {"time":"…","level":"INFO","msg":"listening","service":"mcp","transport":"http","addr":":8080/mcp","mode":"stateful","upstream":"https://ratatosk.io","version":"0.7.1"}
 ```
 
 헬스 체크까지 확인하려면:
@@ -343,7 +343,7 @@ kubectl apply -f $BASE/ratatosk-agent.yaml
 docker로 HTTP 모드를 직접 띄우는 예:
 
 ```bash
-docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.0
+docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk-mcp:0.7.1
 ```
 
 ## 로그와 감사 스트림
@@ -379,7 +379,7 @@ docker run --rm -p 8080:8080 -e MCP_HTTP_ADDR=:8080 ghcr.io/garlickim21/ratatosk
 
 ```bash
 # docker
-docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.0
+docker run -i --rm -e MCP_AUDIT=metadata ghcr.io/garlickim21/ratatosk-mcp:0.7.1
 
 # Helm
 helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=metadata
@@ -459,14 +459,14 @@ helm upgrade ratatosk-mcp ./ratatosk-mcp/charts/ratatosk-mcp --set auditMode=met
 
 ## 버전 고정
 
-- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.7.0`)로 자동 빌드되며
+- **컨테이너 이미지**: 릴리스마다 버전 태그(예: `0.7.1`)로 자동 빌드되며
   멀티 아치(`linux/amd64`, `linux/arm64`)입니다. `latest`는 최신 릴리스를
   따라갑니다 — 재현 가능한 배포에는 버전 태그를 고정하세요.
 - **Helm**: 차트는 차트 저장소로 발행되지 않고 저장소 클론으로만
   설치합니다. 특정 버전에 고정하려면 클론 후 릴리스 태그를 체크아웃하세요:
 
   ```bash
-  git -C ratatosk-mcp checkout v0.7.0
+  git -C ratatosk-mcp checkout v0.7.1
   ```
 
   이미지 태그는 기본적으로 차트의 `appVersion`을 따르고, `image.tag` 값으로

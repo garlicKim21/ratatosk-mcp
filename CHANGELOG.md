@@ -3,7 +3,29 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
-## [Unreleased]
+## [0.7.1] — 2026-08-10
+
+### A briefing that knows which branch you are on
+
+An operator running containerd 2.2.5 was told to act on two CVEs their own
+branch had already closed — CVE-2026-46680 in v2.2.4, CVE-2026-47262 in
+v2.2.5 itself. Both were real fixes; both had been backported across every
+supported branch on the same day; and `check_stack`, which reads only
+releases *newer* than the running version, saw the v2.3.x occurrences and
+nothing else. It is the same failure `get_matter` was built to prevent,
+pointing the other way: not crediting an install with fixes it never
+received, but demanding work it finished a release ago.
+
+- **A matter already fixed at or below the running version, on the running
+  branch, is no longer reported.** The count and the reason go into `note`,
+  so nothing disappears without saying so. Branch equality is what makes the
+  rule safe: a backport to v2.1.9 proves nothing about v2.2.4, which was cut
+  from a different branch and may never have received it — only the running
+  version's own branch is evidence.
+- **`same_matter_also_addressed_in` now names every release on record that
+  carried the matter**, not only those inside the returned window. The window
+  starts above the running version, which meant the branch an operator most
+  needed to see was the one systematically missing from it.
 
 ### Rate limits that hold up when several people share an endpoint
 

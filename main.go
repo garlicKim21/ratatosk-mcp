@@ -144,7 +144,10 @@ func main() {
 			"the entry's version is the minimum to be on before enabling that feature). " +
 			"The split comes from the server's bucket field, the SAME rule the website and the weekly email use. " +
 			"Repeat appearances of one matter_key (the same issue fixed on several release branches) collapse " +
-			"into one entry. " +
+			"into one entry, and same_matter_also_addressed_in names every other release on record that carried " +
+			"it. Branch-aware: a matter already fixed at or below the running version ON THE RUNNING BRANCH is " +
+			"excluded (the install has it), counted in note — so a backport visible on a newer branch is not " +
+			"reported as outstanding work. " +
 			"Pass version_source per component (where you read the version — e.g. a daemonset image tag, or that the user " +
 			"stated it): it is echoed back as an audit trail. This server cannot see your environment, so it cannot " +
 			"verify a version or its source; a running version older than every release on record is flagged in note, " +
@@ -550,9 +553,13 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			}
 		}
 
-		// Facts from releases strictly newer than the running version =
-		// the upgrade path the operator has not yet absorbed.
+		// Changes from releases strictly newer than the running version =
+		// the upgrade path the operator has not yet absorbed. Minus the ones
+		// their own branch already closed — see addressedOnRunningBranch.
+		alreadyHave := addressedOnRunningBranch(changes, currentKey)
+		allOccurrences := occurrencesByMatter(changes)
 		unparseable := 0
+		settled := 0
 		var relevant []Change
 		var keys [][]int
 		var oldest []int
@@ -569,6 +576,15 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			if version.Compare(changeKey, currentKey) <= 0 {
 				continue
 			}
+			// The same matter, already fixed at or below the running version on
+			// the running branch: the operator has it. Counted, not silently
+			// dropped — the note says how many and why.
+			if f.MatterKey != "" {
+				if _, ok := alreadyHave[f.MatterKey]; ok {
+					settled++
+					continue
+				}
+			}
 			if targetKey != nil && version.Compare(changeKey, targetKey) > 0 {
 				continue
 			}
@@ -580,6 +596,11 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 		}
 		if unparseable > 0 {
 			notes = append(notes, fmt.Sprintf("%d change(s) skipped (unparseable release tag)", unparseable))
+		}
+		if settled > 0 {
+			notes = append(notes, fmt.Sprintf(
+				"%d change(s) on newer branches were excluded: the same matter is already fixed at or below %s on your branch — expand any matter_key with get_matter to see every branch",
+				settled, comp.Version))
 		}
 		if n := coverageNote(comp.Version, currentKey, oldest, oldestTag); n != "" {
 			notes = append(notes, n)
@@ -601,7 +622,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			reports = append(reports, rep)
 			continue
 		}
-		rep.Summary, rep.ActionRequired, rep.CheckConfig, rep.OtherChanges = briefReport(relevant, keys)
+		rep.Summary, rep.ActionRequired, rep.CheckConfig, rep.OtherChanges = briefReport(relevant, keys, allOccurrences)
 		if extra := len(rep.OtherChanges) - otherChangesCap; extra > 0 {
 			rep.OtherChanges = rep.OtherChanges[:otherChangesCap]
 			rep.OtherOmitted = extra
@@ -626,8 +647,10 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 			"family and bucket), so rank urgency with it but never decide who is affected with it. " +
 			"Changes on the same matter_key are merged (ids listed together, " +
 			"applies_if_any when conditions differ); one matter fixed on several release branches is one " +
-			"entry (same_matter_also_addressed_in) — expand it with get_matter(matter_key) to see which branch " +
-			"carries which advisories. " +
+			"entry, and same_matter_also_addressed_in names every other release on record that carried it — " +
+			"expand it with get_matter(matter_key) to see which branch carries which advisories. " +
+			"A matter already fixed at or below the running version on the running branch is excluded and " +
+			"counted in note: the install already has it. " +
 			`Call again with detail:"full" for every change verbatim, or drill down: get_release(project, version) ` +
 			"for one release with evidence and source URL, changes_by_entity(name) for one CVE/flag/CRD."
 	}
@@ -647,7 +670,7 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 // "has a condition?" heuristic. The server computes the same distinction for
 // the website and the weekly email, so all three surfaces now agree by
 // construction rather than by coincidence.
-func briefReport(relevant []Change, keys [][]int) (*briefSummary, []briefChange, []briefChange, []briefChange) {
+func briefReport(relevant []Change, keys [][]int, allOccurrences map[string][]string) (*briefSummary, []briefChange, []briefChange, []briefChange) {
 	idx := make([]int, len(relevant))
 	for i := range idx {
 		idx[i] = i
@@ -712,6 +735,23 @@ func briefReport(relevant []Change, keys [][]int) (*briefSummary, []briefChange,
 		sum.ByBucket[bc.Bucket]++
 	}
 
+	// same_matter_also_addressed_in now names every release on record that
+	// carried this matter, not only the ones inside the returned window. The
+	// window is bounded by the running version, so the branch that actually
+	// matters to a given operator was the one most likely to be missing (hub
+	// report, 2026-08-10).
+	for _, bc := range ordered {
+		if bc.MatterKey == "" {
+			continue
+		}
+		bc.AlsoIn = nil
+		for _, v := range allOccurrences[bc.MatterKey] {
+			if v != bc.Version {
+				bc.AlsoIn = append(bc.AlsoIn, v)
+			}
+		}
+	}
+
 	action := []briefChange{}
 	check := []briefChange{}
 	other := []briefChange{}
@@ -726,6 +766,74 @@ func briefReport(relevant []Change, keys [][]int) (*briefSummary, []briefChange,
 		}
 	}
 	return sum, action, check, other
+}
+
+// sameBranch reports whether two version keys sit on the same release branch,
+// which for every project on record means sharing major and minor. A key too
+// short to name a branch answers false — the conservative direction, since the
+// only thing this decides is whether to hide something.
+func sameBranch(a, b []int) bool {
+	return len(a) >= 2 && len(b) >= 2 && a[0] == b[0] && a[1] == b[1]
+}
+
+// addressedOnRunningBranch collects the matters this install already carries.
+//
+// The upgrade path is "releases newer than the running version", which is the
+// right window for finding work — and the wrong one for deciding whether work
+// is still outstanding. Maintainers backport one fix onto every supported
+// branch, so the same matter_key lands on v2.2.4 and v2.3.1 on the same day.
+// An operator running 2.2.5 already has it; showing them the v2.3.1 occurrence
+// as action_required tells them to go fix something that is fixed (observed on
+// a live cluster, 2026-08-10, containerd CVE-2026-46680 and CVE-2026-47262).
+//
+// Branch equality is what makes this safe. "Any occurrence at or below the
+// running version" would be wrong in the other direction: a fix backported to
+// v2.1.9 says nothing about v2.2.4, which was cut from a different branch and
+// may never have received it. Only an occurrence on the running version's own
+// branch, at or below it, proves the running build contains the fix.
+func addressedOnRunningBranch(changes []Change, currentKey []int) map[string]string {
+	out := map[string]string{}
+	for _, c := range changes {
+		if c.MatterKey == "" {
+			continue
+		}
+		key := version.NormalizeVersion(c.Version)
+		if key == nil || !sameBranch(key, currentKey) || version.Compare(key, currentKey) > 0 {
+			continue
+		}
+		// Keep the earliest such occurrence: it is the one that answers
+		// "since when did we have this".
+		if prev, ok := out[c.MatterKey]; ok {
+			if prevKey := version.NormalizeVersion(prev); prevKey != nil && version.Compare(prevKey, key) <= 0 {
+				continue
+			}
+		}
+		out[c.MatterKey] = c.Version
+	}
+	return out
+}
+
+// occurrencesByMatter indexes every version a matter appeared in, so a brief
+// entry can name the sibling branches that carry the same fix instead of only
+// the ones that happen to fall inside the returned window.
+func occurrencesByMatter(changes []Change) map[string][]string {
+	out := map[string][]string{}
+	for _, c := range changes {
+		if c.MatterKey == "" || slices.Contains(out[c.MatterKey], c.Version) {
+			continue
+		}
+		out[c.MatterKey] = append(out[c.MatterKey], c.Version)
+	}
+	for k := range out {
+		sort.Slice(out[k], func(i, j int) bool {
+			a, b := version.NormalizeVersion(out[k][i]), version.NormalizeVersion(out[k][j])
+			if a == nil || b == nil {
+				return out[k][i] < out[k][j]
+			}
+			return version.Compare(a, b) < 0
+		})
+	}
+	return out
 }
 
 // bucketRank orders buckets by urgency — action beats check beats plan.
