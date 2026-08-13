@@ -22,7 +22,10 @@ jobs:
       # source of truth here; the manifests must agree with it on every push.
       - name: kagent tool allowlists match the registered tools
         run: |
-          TOOLS="$(grep -oE '^\s*Name: "[a-z_]+"' main.go | grep -oE '"[a-z_]+"' | tr -d '"' | sort)"
+          # gofmt는 구조체 리터럴 필드를 정렬해 "Name:" 뒤 공백이 여러 칸이 된다 —
+          # 한 칸만 허용하던 구 패턴은 2026-08-10 도구 재작성 이후 아무것도 못 잡아
+          # 이 검사가 3일간 조용히 빨간불이었다. \s+로 정렬 무관하게 잡는다.
+          TOOLS="$(grep -oE '^\s*Name:\s+"[a-z_]+"' main.go | grep -oE '"[a-z_]+"' | tr -d '"' | sort)"
           echo "registered: $(echo "$TOOLS" | tr '\n' ' ')"
           for f in charts/ratatosk-mcp/templates/agent.yaml examples/kagent/ratatosk-agent.yaml; do
             LISTED="$(grep -oE '^ *- [a-z0-9_]+$' "$f" | sed 's/^ *- //' | grep -v '^k8s_' | sort)"
