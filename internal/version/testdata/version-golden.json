@@ -1,0 +1,177 @@
+{
+  "_copy": [
+    "COPY. The source of truth is the worker's table:",
+    "  ratatosk/apps/worker/internal/version/testdata/version-golden.json",
+    "Never edit this file on its own — edit the worker's, then refresh this one verbatim:",
+    "  cp ../ratatosk/apps/worker/internal/version/testdata/version-golden.json internal/version/testdata/",
+    "(the two files are byte-identical apart from this _copy block). It is duplicated rather than",
+    "imported because this is a separate public repository, the same reason internal/version itself",
+    "is a copy: the in-cluster MCP server compares versions client-side and never ships them out."
+  ],
+  "_readme": [
+    "SSOT for release-version semantics. Three implementations must agree on this one table:",
+    "  1. apps/worker/internal/version        (Go, canonical)",
+    "  2. ratatosk-mcp/internal/version       (Go, copy of the canonical + Compare)",
+    "  3. apps/web/src/lib/version.ts         (TS, card ordering)",
+    "Each ships a golden test that reads this file, so a change in one that is not made in the",
+    "other two fails a build instead of silently mis-ordering releases.",
+    "",
+    "Sections:",
+    "  normalize  — raw tag -> integer sort key (null = unparseable, excluded from range queries)",
+    "  split_line — raw tag -> {line, rest}; line \"\" is the project's main line",
+    "  compare    — {a, b} -> verdict. Go verdict is SameLine-gated: \"different_line\" means the",
+    "               pair has no order at all. The web needs a TOTAL order (it sorts cards), so each",
+    "               case also carries web_order, the answer compareVersionsDesc must give:",
+    "               main line first, then lines by name, then key descending, then raw ascending.",
+    "  known_divergence — cases where the current implementation's answer is NOT the sensible one.",
+    "               Asserted anyway (drift between the three copies is what this file catches), but",
+    "               fenced off so nobody reads them as endorsed answers. See _why."
+  ],
+  "normalize": [
+    { "raw": "v1.24.3", "key": [1, 24, 3] },
+    { "raw": "1.24.3", "key": [1, 24, 3] },
+    { "raw": "V1.2.3", "key": [1, 2, 3] },
+    { "raw": "v2", "key": [2] },
+    { "raw": "v1.2", "key": [1, 2] },
+    { "raw": "1", "key": [1] },
+    { "raw": "v1.9.0", "key": [1, 9, 0] },
+    { "raw": "v1.10.0", "key": [1, 10, 0], "note": "1.9 < 1.10 — the string-sort trap" },
+    { "raw": "v1.24.10", "key": [1, 24, 10] },
+    { "raw": "v8.5.7", "key": [8, 5, 7] },
+    { "raw": "0.43.0", "key": [0, 43, 0] },
+    { "raw": "0.9.49.0", "key": [0, 9, 49, 0], "note": "four components (cloud-custodian)" },
+    { "raw": "26.03", "key": [26, 3], "note": "leading zero in a component is just a number" },
+    { "raw": "2026.1.0", "key": [2026, 1, 0], "note": "calver" },
+
+    { "raw": "api/v1.11.1", "key": [1, 11, 1], "note": "containerd sub-component" },
+    { "raw": "chart/1.5.0", "key": [1, 5, 0] },
+    { "raw": "chart/1.10.0", "key": [1, 10, 0] },
+    { "raw": "ce@2.3.4", "key": [2, 3, 4] },
+    { "raw": "ce@v1.0", "key": [1, 0] },
+    { "raw": "cesql@v1.0.0", "key": [1, 0, 0] },
+    { "raw": "flagd/v0.16.1", "key": [0, 16, 1] },
+    { "raw": "flagd-proxy/v0.9.7", "key": [0, 9, 7], "note": "longest prefix wins: flagd-proxy, not flagd" },
+    { "raw": "helm-chart/v2.0.0", "key": [2, 0, 0] },
+    { "raw": "wash-v0.43.0", "key": [0, 43, 0] },
+    { "raw": "knative-v1.12.0", "key": [1, 12, 0], "note": "whole-project prefix — one line for everything" },
+    { "raw": "kubebuilder-v4.0.0", "key": [4, 0, 0] },
+
+    { "raw": "edge-26.1.4", "key": [26, 1, 4], "note": "Linkerd channel" },
+    { "raw": "edge-26.1.10", "key": [26, 1, 10] },
+    { "raw": "lts-4081.3.9", "key": [4081, 3, 9], "note": "Flatcar LTS train" },
+    { "raw": "stable-4593.2.4", "key": [4593, 2, 4], "note": "Flatcar stable train" },
+
+    { "raw": "1.24.3-rc1", "key": [1, 24, 3], "note": "pre-release tail dropped, core kept" },
+    { "raw": "v1.24.3-rc.1", "key": [1, 24, 3] },
+    { "raw": "2.0.0-beta.1", "key": [2, 0, 0] },
+    { "raw": "v1.0.0-alpha.2", "key": [1, 0, 0] },
+    { "raw": "1.2.3+build.7", "key": [1, 2, 3], "note": "build metadata dropped" },
+    { "raw": "v1.2.3-rc1+build.9", "key": [1, 2, 3] },
+
+    { "raw": "  v3.0.1  ", "key": [3, 0, 1], "note": "surrounding whitespace tolerated" },
+
+    { "raw": "vault-1.2.3", "key": [1, 2, 3], "note": "a name starting with v must not lose its v" },
+    { "raw": "velero-1.2.3", "key": [1, 2, 3] },
+
+    { "raw": "redirect", "key": null, "note": "collection artifact — excluded from ranges" },
+    { "raw": "latest", "key": null },
+    { "raw": "nightly", "key": null },
+    { "raw": "", "key": null },
+    { "raw": "   ", "key": null }
+  ],
+  "split_line": [
+    { "raw": "v1.24.3", "line": "", "rest": "v1.24.3" },
+    { "raw": "1.24.3", "line": "", "rest": "1.24.3" },
+    { "raw": "0.9.49.0", "line": "", "rest": "0.9.49.0" },
+    { "raw": "26.03", "line": "", "rest": "26.03" },
+    { "raw": "1.24.3-rc1", "line": "", "rest": "1.24.3-rc1", "note": "a pre-release suffix is not a line" },
+    { "raw": "2.0.0-beta.1", "line": "", "rest": "2.0.0-beta.1" },
+    { "raw": "1.2.3+build.7", "line": "", "rest": "1.2.3+build.7" },
+    { "raw": "v1.2.3-rc1+build.9", "line": "", "rest": "v1.2.3-rc1+build.9" },
+
+    { "raw": "api/v1.11.1", "line": "api", "rest": "v1.11.1" },
+    { "raw": "core/v0.15.0", "line": "core", "rest": "v0.15.0" },
+    { "raw": "flagd/v0.16.1", "line": "flagd", "rest": "v0.16.1" },
+    { "raw": "flagd-proxy/v0.9.7", "line": "flagd-proxy", "rest": "v0.9.7", "note": "longest wins" },
+    { "raw": "helm-chart/v2.0.0", "line": "helm-chart", "rest": "v2.0.0" },
+    { "raw": "operator/v1.2.3", "line": "operator", "rest": "v1.2.3" },
+    { "raw": "cesql@v1.0.0", "line": "cesql", "rest": "v1.0.0" },
+    { "raw": "ce@v1.0", "line": "ce", "rest": "v1.0" },
+    { "raw": "wash-v0.43.0", "line": "wash", "rest": "v0.43.0" },
+    { "raw": "kubebuilder-v4.0.0", "line": "kubebuilder", "rest": "v4.0.0" },
+
+    { "raw": "lts-4081.3.9", "line": "lts", "rest": "4081.3.9" },
+    { "raw": "stable-4593.2.4", "line": "stable", "rest": "4593.2.4" },
+    { "raw": "edge-26.1.4", "line": "edge", "rest": "26.1.4" },
+
+    { "raw": "knative-v1.12.0", "line": "knative", "rest": "v1.12.0" },
+    { "raw": "vault-1.2.3", "line": "vault", "rest": "1.2.3" },
+
+    { "raw": "redirect", "line": "", "rest": "redirect" },
+    { "raw": "latest", "line": "", "rest": "latest" },
+    { "raw": "", "line": "", "rest": "" },
+    { "raw": "  v3.0.1  ", "line": "", "rest": "v3.0.1" }
+  ],
+  "compare": [
+    { "a": "v1.24.3", "b": "v1.24.10", "verdict": "b_newer", "web_order": "b_first" },
+    { "a": "v1.9.0", "b": "v1.10.0", "verdict": "b_newer", "web_order": "b_first" },
+    { "a": "v2.2.5", "b": "v1.7.28", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "v1.24.3", "b": "v1.24.3", "verdict": "equal", "web_order": "tie" },
+    { "a": "  v3.0.1  ", "b": "v3.0.1", "verdict": "equal", "web_order": "tie", "note": "whitespace is not a difference" },
+    { "a": "1.24.3", "b": "v1.24.3", "verdict": "equal", "web_order": "a_first", "note": "same key; web tie-breaks on the raw tag so the order is reproducible" },
+    { "a": "v1.2", "b": "v1.2.3", "verdict": "b_newer", "web_order": "b_first", "note": "a shorter key that prefixes a longer one is older (Postgres int[] order)" },
+    { "a": "0.9.49.0", "b": "0.9.51.0", "verdict": "b_newer", "web_order": "b_first" },
+
+    { "a": "edge-26.1.4", "b": "edge-26.1.10", "verdict": "b_newer", "web_order": "b_first" },
+    { "a": "edge-26.8.1", "b": "edge-26.1.4", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "lts-4081.3.9", "b": "lts-4081.3.7", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "api/v1.11.1", "b": "api/v1.11.0", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "flagd/v0.16.1", "b": "flagd/v0.15.0", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "flagd-proxy/v0.9.7", "b": "flagd-proxy/v0.9.3", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "knative-v1.12.0", "b": "knative-v1.11.5", "verdict": "a_newer", "web_order": "a_first" },
+    { "a": "chart/1.10.0", "b": "chart/1.5.0", "verdict": "a_newer", "web_order": "a_first" },
+
+    { "a": "v1.7.28", "b": "api/v1.11.0", "verdict": "different_line", "web_order": "a_first", "note": "the live defect (2026-08-10): containerd was offered api/v1.11.0 as an upgrade" },
+    { "a": "api/v1.11.1", "b": "v2.2.5", "verdict": "different_line", "web_order": "b_first", "note": "main line sorts ahead of a sub-component line" },
+    { "a": "lts-4081.3.7", "b": "stable-4593.2.4", "verdict": "different_line", "web_order": "a_first", "note": "lts < stable by name" },
+    { "a": "stable-4593.2.4", "b": "lts-4081.3.9", "verdict": "different_line", "web_order": "b_first" },
+    { "a": "flagd/v0.16.1", "b": "core/v0.15.0", "verdict": "different_line", "web_order": "b_first", "note": "core < flagd by name" },
+    { "a": "flagd/v0.16.1", "b": "flagd-proxy/v0.9.7", "verdict": "different_line", "web_order": "a_first" },
+    { "a": "ce@v1.0.1", "b": "cesql@v1.0.0", "verdict": "different_line", "web_order": "a_first" },
+    { "a": "vault-1.2.3", "b": "velero-1.2.3", "verdict": "different_line", "web_order": "a_first" },
+
+    { "a": "1.24.3", "b": "1.24.3-rc1", "verdict": "equal", "web_order": "a_first", "note": "same key; the finished release wins the tie-break" },
+    { "a": "1.24.3-rc1", "b": "1.24.3-rc2", "verdict": "equal", "web_order": "a_first" },
+    { "a": "v1.24.3", "b": "redirect", "verdict": "a_newer", "web_order": "a_first", "note": "an unparseable tag sinks to the bottom of its line" },
+    { "a": "redirect", "b": "latest", "verdict": "equal", "web_order": "b_first", "note": "both unparseable — order is the raw tag's" }
+  ],
+  "known_divergence": {
+    "_why": [
+      "SplitLine takes the longest prefix ending in / @ - whose remainder merely STARTS with a digit.",
+      "A numeric-leading pre-release or build tail therefore gets eaten as if it were a release line,",
+      "and the key is then read out of the tail instead of the core version:",
+      "  1.36.5-1768567475-9f2b1c3  ->  line \"1.36.5-1768567475\", key [9]",
+      "  2.0.0-1                    ->  line \"2.0.0\",            key [1]",
+      "A line prefix that is itself a version number is nonsense, and [9] is not 1.36.5.",
+      "Measured 2026-08-13: no tag of this shape exists in raw_releases (831 rows, 9 distinct shapes),",
+      "so nothing is mis-sorted in production today — this is latent, not live. Left as-is because",
+      "changing NormalizeVersion changes stored version_key values and needs a backfill decision.",
+      "These entries pin CURRENT behaviour so the three copies stay identical; they are not the",
+      "answers we want. Fixing the rule means changing this section and all three implementations."
+    ],
+    "normalize": [
+      { "raw": "1.36.5-1768567475-9f2b1c3", "key": [9], "note": "want [1,36,5]" },
+      { "raw": "1.36.5-1768567475", "key": [1768567475], "note": "want [1,36,5]" },
+      { "raw": "2.0.0-1", "key": [1], "note": "want [2,0,0] — Debian-style revision suffix" },
+      { "raw": "v1.2.3-20260101", "key": [20260101], "note": "want [1,2,3] — dated build" },
+      { "raw": "1.2.3-0", "key": [0], "note": "want [1,2,3]" }
+    ],
+    "split_line": [
+      { "raw": "1.36.5-1768567475-9f2b1c3", "line": "1.36.5-1768567475", "rest": "9f2b1c3", "note": "want line \"\"" },
+      { "raw": "1.36.5-1768567475", "line": "1.36.5", "rest": "1768567475", "note": "want line \"\"" },
+      { "raw": "2.0.0-1", "line": "2.0.0", "rest": "1", "note": "want line \"\"" },
+      { "raw": "v1.2.3-20260101", "line": "v1.2.3", "rest": "20260101", "note": "want line \"\"" },
+      { "raw": "1.2.3-0", "line": "1.2.3", "rest": "0", "note": "want line \"\"" }
+    ]
+  }
+}

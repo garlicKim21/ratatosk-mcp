@@ -8,7 +8,9 @@
 //
 // COPY of apps/worker/internal/version (source of truth) — bundled here so the
 // in-cluster MCP server compares versions client-side and never sends them to
-// the server (RFC §5.7 privacy). Keep in sync when the worker's copy changes.
+// the server (RFC §5.7 privacy). Keep in sync when the worker's copy changes —
+// including testdata/version-golden.json, the shared answer key this package,
+// the worker, and the web card sorter are all tested against.
 package version
 
 import (
