@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -201,7 +202,22 @@ func main() {
 			rateField = strconv.Itoa(rl.limit) + "/min per caller"
 		}
 		slog.Info("listening", "transport", "http", "addr", addr+"/mcp", "mode", mode, "upstream", base, "version", buildVersion, "rate_limit", rateField)
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		// Explicit timeouts: this is an unauthenticated public endpoint, and the
+		// zero-value http.Server leaves every timeout unset (unbounded), so a
+		// client that dribbles a request header one byte at a time holds a
+		// goroutine/FD forever (slowloris) — and does it below the rate limiter,
+		// which only counts requests that finish their headers. WriteTimeout is
+		// generous because a large check_stack legitimately streams a while.
+		srv := &http.Server{
+			Addr:              addr,
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      120 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
+		if err := srv.ListenAndServe(); err != nil {
 			slog.Error("http server exited", "kind", errKind(err))
 			os.Exit(1)
 		}
@@ -418,6 +434,11 @@ type componentReport struct {
 // is counted in other_changes_omitted — never dropped silently.
 const otherChangesCap = 100
 
+// maxComponents bounds one check_stack call. Each component fans out to full
+// upstream paging plus a probe on a miss, so an unbounded list is a request
+// amplifier against our own API. Real stacks are tens of items.
+const maxComponents = 100
+
 // relevantChangesCap bounds a detail:"full" component — a long upgrade path can
 // otherwise be tens of thousands of tokens (observed: envoy v1.36.0→latest,
 // 75 changes ≈ 73 KB). The cut is counted in relevant_changes_omitted — never
@@ -496,6 +517,13 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 	ctx = requestContext(ctx, "check_stack", req)
 	if len(args.Components) == 0 {
 		return errResult(fmt.Errorf("components is required")), nil, nil
+	}
+	// One tool call costs one rate-limit token, but each component fans out to
+	// full upstream paging (/v1/changes) plus a tracked-project probe on a
+	// zero-result miss. Without a cap, a single call amplifies into thousands
+	// of upstream requests against our own API. A real stack is tens of items.
+	if len(args.Components) > maxComponents {
+		return errResult(fmt.Errorf("too many components: %d (max %d)", len(args.Components), maxComponents)), nil, nil
 	}
 	minRank := 0
 	if args.SeverityMin != "" {

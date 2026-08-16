@@ -3,6 +3,18 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### Security (hardening)
+
+- HTTP server now sets explicit timeouts (`ReadHeaderTimeout`, `ReadTimeout`,
+  `WriteTimeout`, `IdleTimeout`, `MaxHeaderBytes`) instead of the unbounded
+  zero-value `http.Server` — closes a slowloris vector on the public endpoint
+  where a client dribbling headers held a goroutine below the rate limiter.
+- `check_stack` now caps `components` at 100. An unbounded list fanned out to
+  full upstream paging per component, amplifying one rate-limited call into
+  thousands of upstream requests.
+
 ## [0.7.4] — 2026-08-10
 
 ### A version whose line does not exist is a dropped prefix, not an empty answer
