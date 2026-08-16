@@ -26,6 +26,7 @@ const (
 	ctxKeyTool ctxKey = iota
 	ctxKeyTraceparent
 	ctxKeyTraceID
+	ctxKeyCallerClass
 )
 
 // W3C trace context: version(2)-trace_id(32)-parent_id(16)-flags(2), lowercase hex.
@@ -50,6 +51,13 @@ func requestContext(ctx context.Context, tool string, req *mcp.CallToolRequest) 
 func traceparentFrom(ctx context.Context) string {
 	tp, _ := ctx.Value(ctxKeyTraceparent).(string)
 	return tp
+}
+
+// callerClassFrom returns "external" or "self" when the HTTP layer classified
+// the caller, else "". It is a single bit — never the address that produced it.
+func callerClassFrom(ctx context.Context) string {
+	c, _ := ctx.Value(ctxKeyCallerClass).(string)
+	return c
 }
 
 // ctxHandler stamps tool and trace_id from the request context onto every

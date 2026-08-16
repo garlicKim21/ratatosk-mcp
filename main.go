@@ -198,7 +198,7 @@ func main() {
 		// which is what a self-hosted single-tenant server wants.
 		rl := rateLimitFromEnv(os.Getenv("MCP_RATE_LIMIT_PER_MIN"))
 		mux := http.NewServeMux()
-		mux.Handle("/mcp", rateLimitMiddleware(rl, handler))
+		mux.Handle("/mcp", callerClassMiddleware(rateLimitMiddleware(rl, handler)))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})

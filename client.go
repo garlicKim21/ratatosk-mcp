@@ -215,6 +215,12 @@ func (c *apiClient) get(ctx context.Context, endpoint, path string, q url.Values
 	if tp := traceparentFrom(ctx); tp != "" {
 		req.Header.Set("traceparent", tp)
 	}
+	// One bit, no address: lets a hosted deployment's upstream separate real
+	// users from the operator's own calls, which are otherwise indistinguishable
+	// over an internal network (see callerClassMiddleware).
+	if cc := callerClassFrom(ctx); cc != "" {
+		req.Header.Set("X-Ratatosk-Caller", cc)
+	}
 	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -377,6 +383,12 @@ func (c *apiClient) projectTracked(ctx context.Context, project string) (bool, e
 	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
 	if tp := traceparentFrom(ctx); tp != "" {
 		req.Header.Set("traceparent", tp)
+	}
+	// One bit, no address: lets a hosted deployment's upstream separate real
+	// users from the operator's own calls, which are otherwise indistinguishable
+	// over an internal network (see callerClassMiddleware).
+	if cc := callerClassFrom(ctx); cc != "" {
+		req.Header.Set("X-Ratatosk-Caller", cc)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

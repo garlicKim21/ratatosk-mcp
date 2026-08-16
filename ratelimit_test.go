@@ -145,3 +145,33 @@ func TestCallerKeyPrefersForwardedFor(t *testing.T) {
 		})
 	}
 }
+
+func TestCallerClassMiddleware(t *testing.T) {
+	tests := []struct {
+		name        string
+		selfCallers string
+		callerIP    string
+		want        string
+	}{
+		{"exact match is self", "203.0.113.7", "203.0.113.7", "self"},
+		{"prefix match is self", "203.0.113.", "203.0.113.99", "self"},
+		{"non-match is external", "203.0.113.", "198.51.100.1", "external"},
+		{"unset means everyone external", "", "203.0.113.7", "external"},
+		{"partial prefix without dot does not match", "203.0.113.7", "203.0.113.70", "external"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MCP_SELF_CALLERS", tc.selfCallers)
+			var got string
+			h := callerClassMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				got = callerClassFrom(r.Context())
+			}))
+			r := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+			r.Header.Set("Cf-Connecting-Ip", tc.callerIP)
+			h.ServeHTTP(httptest.NewRecorder(), r)
+			if got != tc.want {
+				t.Fatalf("caller class = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -3,6 +3,19 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### Added
+
+- HTTP mode classifies each caller as `self` or `external` against
+  `MCP_SELF_CALLERS` and forwards only that class upstream
+  (`X-Ratatosk-Caller`). A hosted deployment reaches its upstream over an
+  internal network with no forwarding header, so upstream metrics counted every
+  hosted user as the operator's own traffic and adoption read as zero. The
+  address is compared in-process and discarded — it is neither logged nor sent.
+  Unset (the default, and every self-hosted install) classifies all callers as
+  external, which costs nothing and changes no behavior.
+
 ## [0.7.5] — 2026-08-16
 
 ### Security (hardening)

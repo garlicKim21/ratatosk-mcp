@@ -25,8 +25,10 @@ package main
 // caller would only get in the way.
 
 import (
+	"context"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -122,6 +124,41 @@ func callerKey(req *http.Request) string {
 
 // rateLimitMiddleware wraps a handler with per-caller limiting. A nil limiter
 // is the identity, so the self-hosted path costs nothing.
+// callerClassMiddleware tags each request with one bit — is this caller one of
+// the operator's own addresses, or someone else — and puts it on the request
+// context so the upstream call can carry it.
+//
+// Why it exists: a hosted deployment reaches its upstream over an internal
+// network with no forwarding header, so upstream metrics cannot tell a real
+// hosted user from the operator's own testing; both look internal. Everything
+// hosted users do lands in the "our own traffic" bucket and adoption reads as
+// zero. This restores the distinction without weakening the privacy stance —
+// the address is compared here and discarded, and only the class travels.
+//
+// MCP_SELF_CALLERS is a comma-separated list of addresses; an entry ending in
+// "." is a prefix match. Unset means every caller is external, which is the
+// right default for a deployment that has no "own" traffic.
+func callerClassMiddleware(next http.Handler) http.Handler {
+	raw := strings.Split(os.Getenv("MCP_SELF_CALLERS"), ",")
+	selfCallers := make([]string, 0, len(raw))
+	for _, e := range raw {
+		if e = strings.TrimSpace(e); e != "" {
+			selfCallers = append(selfCallers, e)
+		}
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		key := callerKey(req)
+		class := "external"
+		for _, e := range selfCallers {
+			if (strings.HasSuffix(e, ".") && strings.HasPrefix(key, e)) || key == e {
+				class = "self"
+				break
+			}
+		}
+		next.ServeHTTP(w, req.WithContext(context.WithValue(req.Context(), ctxKeyCallerClass, class)))
+	})
+}
+
 func rateLimitMiddleware(rl *rateLimiter, next http.Handler) http.Handler {
 	if rl == nil {
 		return next
