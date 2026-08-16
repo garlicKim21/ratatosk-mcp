@@ -3,7 +3,7 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
-## [Unreleased]
+## [0.7.5] — 2026-08-16
 
 ### Security (hardening)
 
@@ -14,6 +14,13 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 - `check_stack` now caps `components` at 100. An unbounded list fanned out to
   full upstream paging per component, amplifying one rate-limited call into
   thousands of upstream requests.
+- Stateful HTTP mode now expires idle sessions after 30 minutes. The SDK never
+  closes them when the timeout is zero, so a long-running install that
+  reconnects often grew memory with no attacker involved. Stateless mode — what
+  the 2026-07-28 revision requires — allocates no session and is unaffected.
+- Upstream transport failures no longer return the request URL and resolved
+  address to the caller. The class is reported (`upstream request failed
+  (connection_refused)`); the detail stays in the server log.
 
 ## [0.7.4] — 2026-08-10
 

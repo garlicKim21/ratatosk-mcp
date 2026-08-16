@@ -208,7 +208,8 @@ func (c *apiClient) get(ctx context.Context, endpoint, path string, q url.Values
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return err
+		// err quotes the full URL; keep the upstream address out of the answer.
+		return fmt.Errorf("could not build upstream request for %s", endpoint)
 	}
 	req.Header.Set("User-Agent", "ratatosk-mcp/"+buildVersion)
 	if tp := traceparentFrom(ctx); tp != "" {
@@ -218,13 +219,19 @@ func (c *apiClient) get(ctx context.Context, endpoint, path string, q url.Values
 	resp, err := c.http.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, "upstream fetch failed", "upstream", endpoint, "kind", errKind(err))
-		return err
+		// Transport errors carry the full request URL and the resolved address
+		// ("dial tcp 172.x.x.x:3000: ..."). That string is returned to the
+		// caller verbatim by errResult, so on the hosted endpoint an anonymous
+		// internet caller could read our internal topology off a failed
+		// request. The detail stays in the log line above; the caller gets the
+		// class, which is all an agent can act on anyway.
+		return fmt.Errorf("upstream request failed (%s)", errKind(err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		slog.ErrorContext(ctx, "upstream body read failed", "upstream", endpoint, "kind", errKind(err))
-		return err
+		return fmt.Errorf("upstream response read failed (%s)", errKind(err))
 	}
 	switch {
 	case resp.StatusCode == http.StatusOK:
@@ -374,7 +381,7 @@ func (c *apiClient) projectTracked(ctx context.Context, project string) (bool, e
 	resp, err := c.http.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, "upstream fetch failed", "upstream", "/v1/releases/{project}", "kind", errKind(err))
-		return false, err
+		return false, fmt.Errorf("upstream request failed (%s)", errKind(err))
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))

@@ -181,7 +181,17 @@ func main() {
 		stateless := os.Getenv("MCP_HTTP_STATELESS") == "1"
 		handler := mcp.NewStreamableHTTPHandler(
 			func(*http.Request) *mcp.Server { return server },
-			&mcp.StreamableHTTPOptions{Stateless: stateless})
+			&mcp.StreamableHTTPOptions{
+				Stateless: stateless,
+				// Stateful mode keeps a session per client, and the SDK never
+				// closes idle ones when this is zero — an install that reconnects
+				// often grows memory until it dies, with no attacker involved.
+				// Stateless mode (what the 2026-07-28 revision needs) allocates
+				// nothing, so this only guards the backward-compatibility path.
+				// Expiry is the protocol's own mechanism: a client returning with
+				// a closed session id re-initializes.
+				SessionTimeout: 30 * time.Minute,
+			})
 		// Per-caller limiting sits in front of the MCP handler, not upstream:
 		// this process is the one that can tell hosted callers apart, and the
 		// upstream API deliberately cannot (see ratelimit.go). Off by default,
