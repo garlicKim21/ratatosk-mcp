@@ -39,6 +39,21 @@ trap cleanup EXIT
 
 echo "rehearsing ratatosk-mcp $VERSION (tools: $(echo "$TOOLS" | tr '\n' ' '))"
 
+# The release bump commit races the release workflow: this script starts the
+# moment the bump lands on main, while the new appVersion image is still
+# building — the rollout below then times out and reads as a build failure
+# (observed v0.5.0 and v0.8.0). Wait for the manifest instead. Every non-release
+# push targets an already-published tag and passes on the first probe.
+step "image ${IMAGE_REPO}:${VERSION} on the registry"
+for i in $(seq 1 32); do
+  if docker manifest inspect "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1; then
+    pass "manifest present (probe $i)"
+    break
+  fi
+  [ "$i" -eq 32 ] && fail "image not on GHCR after 8m of waiting — the release build is missing or failed, not slow"
+  sleep 15
+done
+
 # This script wipes namespace kagent between phases, which would destroy a real
 # kagent install. Refuse anything that is not a throwaway kind cluster unless the
 # caller says otherwise out loud.
