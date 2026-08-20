@@ -49,10 +49,10 @@ Docker、Helm チャート、ソースビルドのいずれでも構いません
 Docker がインストール済みなら：
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.4
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.5
 ```
 
-`0.7.4` が現行リリースです。新しいリリースを追い続けるなら `latest` を
+`0.7.5` が現行リリースです。新しいリリースを追い続けるなら `latest` を
 使ってください。
 
 どちらの場合も、接続を確認してください：
@@ -71,6 +71,25 @@ claude mcp list
 > 変更されたデフォルト値を、**全員に該当するもの**と**自分の構成が一致する
 > 場合だけ該当するもの**に分けて示します。各 change には、根拠としてリリース
 > ノート原文の引用が付きます。
+
+実際の `check_stack` 応答から 1 項目をそのまま載せます
+(istio、2026-08-20 実測):
+
+```json
+{
+  "severity": "high",
+  "family": "security",
+  "bucket": "action",
+  "applies_if": "uses JWKS Resolver",
+  "quote": "- CVE-2026-31837 / GHSA-v75c-crr9-733c : (CVSS score 8.7, High): JWKS Resolver Failure May Allow Authentication Bypass Using Known Default Keys.",
+  "same_matter_also_addressed_in": ["1.28.5", "1.29.1"]
+}
+```
+
+`applies_if` は読むための散文ではなく、エージェントが評価する条件式です —
+JWKS を使わないスタックなら、エージェントはこの項目を自分で読み飛ばします。
+応答には何が送信されたかも明記されます: *"versions were compared locally;
+only project slugs were sent to the server."*
 
 ほかのクライアント（Claude Desktop、kagent、クラスタ内エージェント）での
 設定方法と、設定項目の完全なリファレンスは、

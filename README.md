@@ -47,10 +47,10 @@ Docker, the Helm chart, or a source build. With Claude Code and Docker
 installed:
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.4
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.5
 ```
 
-`0.7.4` is the current release; use `latest` to follow new ones.
+`0.7.5` is the current release; use `latest` to follow new ones.
 
 Either way, verify the connection:
 
@@ -68,6 +68,25 @@ Then ask your agent a question the tools can answer:
 > that changed — separated into what applies to everyone and what applies only
 > if your configuration matches. Each change carries a verbatim quote from the
 > release notes as evidence.
+
+One entry from a real `check_stack` answer, as the agent receives it
+(istio, measured 2026-08-20):
+
+```json
+{
+  "severity": "high",
+  "family": "security",
+  "bucket": "action",
+  "applies_if": "uses JWKS Resolver",
+  "quote": "- CVE-2026-31837 / GHSA-v75c-crr9-733c : (CVSS score 8.7, High): JWKS Resolver Failure May Allow Authentication Bypass Using Known Default Keys.",
+  "same_matter_also_addressed_in": ["1.28.5", "1.29.1"]
+}
+```
+
+`applies_if` is a condition the agent evaluates, not prose to read: a stack
+that runs no JWKS resolver skips this entry without asking anyone. The answer
+also carries its own privacy line, verbatim: *"versions were compared locally;
+only project slugs were sent to the server."*
 
 Other clients (Claude Desktop, kagent, in-cluster agents) and the full setup
 reference: see the [install guide](docs/install.en.md).

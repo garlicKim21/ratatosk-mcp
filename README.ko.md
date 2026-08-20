@@ -48,10 +48,10 @@ claude mcp add --transport http ratatosk https://ratatosk.io/mcp
 빌드 가운데 어느 방식이든 됩니다. Claude Code와 Docker가 설치되어 있다면:
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.4
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.5
 ```
 
-`0.7.4`이 현재 릴리스이고, 새 릴리스를 계속 따라가려면 `latest`를 쓰세요.
+`0.7.5`가 현재 릴리스이고, 새 릴리스를 계속 따라가려면 `latest`를 쓰세요.
 
 어느 쪽이든 연결을 확인하세요:
 
@@ -68,6 +68,25 @@ claude mcp list
 > 고쳐진 CVE, 업그레이드 경로에서 사라지는 API, 달라진 기본값 같은
 > 것들을 **모두에게 해당하는 것**과 **내 설정이 맞을 때만 해당하는 것**으로
 > 갈라서 줍니다. 각 변경에는 릴리스 노트 원문 인용이 근거로 붙습니다.
+
+실제 `check_stack` 응답에서 항목 하나를 그대로 옮기면 이렇습니다
+(istio, 2026-08-20 실측):
+
+```json
+{
+  "severity": "high",
+  "family": "security",
+  "bucket": "action",
+  "applies_if": "uses JWKS Resolver",
+  "quote": "- CVE-2026-31837 / GHSA-v75c-crr9-733c : (CVSS score 8.7, High): JWKS Resolver Failure May Allow Authentication Bypass Using Known Default Keys.",
+  "same_matter_also_addressed_in": ["1.28.5", "1.29.1"]
+}
+```
+
+`applies_if`는 읽어야 할 산문이 아니라 에이전트가 평가하는 조건식입니다 —
+JWKS를 안 쓰는 스택이면 에이전트가 이 항목을 스스로 건너뜁니다. 응답에는
+무엇이 전송됐는지도 명시돼 옵니다: *"versions were compared locally;
+only project slugs were sent to the server."*
 
 다른 클라이언트(Claude Desktop, kagent, 클러스터 내 에이전트)와 전체 설정
 레퍼런스는 [설치 가이드](docs/install.ko.md)를 보세요.
