@@ -48,10 +48,10 @@ claude mcp add --transport http ratatosk https://ratatosk.io/mcp
 빌드 가운데 어느 방식이든 됩니다. Claude Code와 Docker가 설치되어 있다면:
 
 ```bash
-claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.7.5
+claude mcp add ratatosk -- docker run -i --rm ghcr.io/garlickim21/ratatosk-mcp:0.8.0
 ```
 
-`0.7.5`가 현재 릴리스이고, 새 릴리스를 계속 따라가려면 `latest`를 쓰세요.
+`0.8.0`이 현재 릴리스이고, 새 릴리스를 계속 따라가려면 `latest`를 쓰세요.
 
 어느 쪽이든 연결을 확인하세요:
 
