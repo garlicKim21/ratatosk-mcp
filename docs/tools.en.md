@@ -233,7 +233,9 @@ matter, switch to `get_matter`.
 | `detail` | no | string | `brief` | `brief`: `summary` plus the three bucket lists, merged and one line each. `full`: every matching change verbatim in `relevant_changes`, unmerged and with no summary — capped at 50 per component, the overflow counted in `relevant_changes_omitted` |
 | `severity_min` | no | string | *(none = all)* | Only changes at or above this severity: `info`, `low`, `medium`, `high`, `critical` |
 
-In `brief` mode the `other_changes` tail is capped at 25 per component,
+In `brief` mode quotes are shortened to 120 characters with an ellipsis —
+`detail:"full"` and `get_release` carry them verbatim. The `other_changes`
+tail is capped at 25 per component,
 with the overflow counted in `other_changes_omitted`. Nothing is ever
 dropped silently — `action_required` and `check_config` are not capped, and
 `detail:"full"` or `get_release` returns the rest.

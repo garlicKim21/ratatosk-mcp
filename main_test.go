@@ -479,3 +479,23 @@ func TestComponentsRejectionShowsTheShape(t *testing.T) {
 		t.Fatalf("rejection does not show the correct shape: %v", err)
 	}
 }
+
+// A briefing shortens long quotes; a quote is evidence, so the cut must be
+// visible and must never split a rune (the text has to stay citable).
+func TestBriefQuoteBoundsTheTailVisibly(t *testing.T) {
+	short := "cilium-agent now refuses an empty policy"
+	if got := briefQuote(short); got != short {
+		t.Fatalf("a typical quote was altered: %q", got)
+	}
+	long := strings.Repeat("가나다", 200) // 600 runes, multi-byte on purpose
+	got := briefQuote(long)
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("truncation is invisible: %q", got[len(got)-12:])
+	}
+	if r := []rune(got); len(r) != briefQuoteChars+1 {
+		t.Fatalf("cut %d runes, want %d + ellipsis", len(r)-1, briefQuoteChars)
+	}
+	if !strings.HasPrefix(long, strings.TrimSuffix(got, "…")) {
+		t.Fatal("the kept part is not a prefix of the original — the quote is no longer citable")
+	}
+}

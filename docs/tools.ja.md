@@ -229,7 +229,8 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if の判定
 | `detail` | いいえ | string | `brief` | `brief`：`summary` とバケット別の 3 リスト（マージ済み・1 行ずつ）。`full`：該当する変更を全文で `relevant_changes` に（マージなし・サマリなし） — コンポーネントあたり 50 件で打ち切り、切られた数は `relevant_changes_omitted` に |
 | `severity_min` | いいえ | string | *(なし = すべて)* | この深刻度以上のみ：`info`、`low`、`medium`、`high`、`critical` |
 
-`brief` では `other_changes` の末尾はコンポーネントあたり 25 件で打ち切られ、
+`brief` では引用は 120 文字で省略記号付きに短縮されます — 全文は `detail:"full"` と
+`get_release` にそのまま残ります。`other_changes` の末尾はコンポーネントあたり 25 件で打ち切られ、
 切られた数は `other_changes_omitted` に載ります。黙って捨てることはありません —
 `action_required` と `check_config` に上限はなく、残りは `detail:"full"` または
 `get_release` で取得できます。

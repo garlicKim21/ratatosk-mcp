@@ -221,7 +221,8 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if 판정
 | `detail` | 아니오 | string | `brief` | `brief`: `summary`와 버킷별 세 목록(병합·한 줄씩). `full`: 해당하는 변경 전문을 `relevant_changes`에(병합 없음, 요약 없음) — 컴포넌트당 50건에서 자르고 잘린 수는 `relevant_changes_omitted`에 |
 | `severity_min` | 아니오 | string | *(없음 = 전부)* | 이 심각도 이상만: `info`, `low`, `medium`, `high`, `critical` |
 
-`brief`에서 `other_changes` 꼬리는 컴포넌트당 25건에서 자르고 잘린 수는
+`brief`에서 인용은 120자에서 줄임표와 함께 잘립니다 — 전문은 `detail:"full"`과
+`get_release`에 그대로 있습니다. `other_changes` 꼬리는 컴포넌트당 25건에서 자르고 잘린 수는
 `other_changes_omitted`에 실립니다. 조용히 버리는 일은 없습니다 —
 `action_required`와 `check_config`에는 상한이 없고, 나머지는
 `detail:"full"` 또는 `get_release`로 전부 받을 수 있습니다.

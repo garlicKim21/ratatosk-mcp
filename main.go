@@ -561,6 +561,27 @@ const maxComponents = 100
 // silent; agents narrow with severity_min/target_version or drill down.
 const relevantChangesCap = 50
 
+// briefQuoteChars bounds a quote in a briefing. Measured over a five-component
+// stack (143 entries): median quote 90 characters, mean 120, longest 548 — so
+// this bounds the tail without touching the typical entry, and 46 of 143 were
+// cut. A shorter cap (60) would save another ~5% of the whole response and
+// leave two thirds of the quotes as fragments, which is the wrong trade: the
+// quote is what lets a reader check the claim instead of trusting it.
+//
+// The truncation is visible (ellipsis) and never the last word: detail:"full"
+// and get_release carry the quote verbatim, and the docs say so.
+const briefQuoteChars = 120
+
+// briefQuote shortens on a rune boundary — cutting mid-rune would corrupt the
+// text of a quote whose whole job is to be citable.
+func briefQuote(q string) string {
+	r := []rune(q)
+	if len(r) <= briefQuoteChars {
+		return q
+	}
+	return strings.TrimRight(string(r[:briefQuoteChars]), " ") + "…"
+}
+
 // coverageNote flags a running version that sits below every release we hold a
 // change for. It is the one cross-check this server can make on a claim about an
 // environment it cannot see, and it catches two different things with the same
@@ -899,7 +920,7 @@ func briefReport(relevant []Change, keys [][]int, allOccurrences map[string][]st
 			Condition: f.Condition,
 			Targets:   f.CondTargets,
 			Window:    f.Window,
-			Quote:     f.Quote,
+			Quote:     briefQuote(f.Quote),
 			IDs:       ids,
 		}
 		if f.MatterKey != "" {

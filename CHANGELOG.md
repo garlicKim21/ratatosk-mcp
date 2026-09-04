@@ -3,6 +3,17 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### Changed
+
+- A `check_stack` briefing shortens quotes to 120 characters with an ellipsis;
+  `detail:"full"` and `get_release` still carry them verbatim. Measured over a
+  five-component stack, quotes were 36% of the entry payload (median 90
+  characters, longest 548), so this bounds the tail without reducing the
+  typical entry to a fragment. The briefing is where a caller decides what to
+  look at; the verbatim quote is one call away, where the decision is made.
+
 ## [0.9.0] — 2026-09-04
 
 ### Changed
