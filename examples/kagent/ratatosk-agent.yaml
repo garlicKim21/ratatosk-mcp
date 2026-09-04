@@ -37,19 +37,43 @@ spec:
             all_namespaces, and its default is your own namespace — reporting
             that as "the cluster" is wrong.
             Mind where a version actually comes from:
-              * k8s_get_resources(resource_type: pod) lists names and status,
-                NOT images. It is never a version source, at any scope.
               * deployment / daemonset / statefulset listings do show IMAGES.
                 Check all three — cilium, CNI plugins and node agents are
                 DaemonSets, and a Deployment listing may only show an operator
                 image while the workload itself runs elsewhere.
               * the control plane runs as static pods and the kubelet and
                 container runtime live on the nodes: read the kube-apiserver
-                pod with k8s_get_resource_yaml, and the nodes with
+                pod by name with k8s_get_resource_yaml, and the nodes with
                 k8s_get_resources(resource_type: node).
+              * k8s_get_resources(resource_type: pod) lists names and status,
+                NOT images — and it is the single most expensive call you can
+                make. Use it only to learn the names you will then read.
               * use k8s_get_resource_yaml whenever a tag is ambiguous.
+            Read narrowly on purpose — the size of what you pull back is a
+            cost you pay for the rest of the session:
+              * do NOT pass output to k8s_get_resources. Its default (wide)
+                carries the IMAGES columns, which is everything a version
+                read needs. Asking for json or yaml returns the same versions
+                for 20-100x the size — one measured cluster-wide pod listing
+                in json came back at 1.4M characters, larger than the whole
+                context window, while the same survey done with defaults fits
+                in about 16,000.
+              * when you need a full spec, name the one resource and read it
+                with k8s_get_resource_yaml. Re-running a listing as yaml or
+                json is not an alternative path to that; it is the same answer
+                plus everything you did not ask for.
             Never modify the cluster. Versions are compared locally by
             check_stack; they are never sent to the ratatosk server.
+          - Ask these tools for what you will act on, not for everything they
+            can return. Every answer stays in the context window for the rest
+            of the session, and on a self-hosted model it is re-processed on
+            every later turn — one oversized answer slows down every turn that
+            follows it.
+              * start check_stack at detail "brief" and reserve "full" for a
+                single component you are drilling into. When surveying a wide
+                stack, pass severity_min so the report carries what you would
+                act on rather than every change on file.
+              * always pass an explicit limit to list_changes.
           - NEVER pass check_stack a version you did not read off a live
             resource. If you cannot resolve one, name the component and what
             you would have to read, and leave it out — do not fill the gap

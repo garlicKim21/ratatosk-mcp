@@ -3,6 +3,20 @@
 Notable changes to ratatosk-mcp. Versions follow the container tag and the
 Helm chart `appVersion`; see `docs/` for the release procedure.
 
+## [Unreleased]
+
+### Changed
+
+- The agent prompt now says what a tool answer costs, not just whether it is
+  useful. A measured run pulled 1.4M characters from one cluster-wide pod
+  listing in `json` — larger than the model's whole context window — because
+  the rules called that call useless without calling it expensive, and a
+  self-hosted model re-processes every past tool answer on every later turn.
+  The prompt now asks for the default (`wide`) listing, reserves full specs
+  for a named resource, starts `check_stack` at `brief`, and passes an explicit
+  `limit` to `list_changes`. Chart and kagent example only — no image change,
+  so a `helm upgrade` from a checkout picks it up without a release.
+
 ## [0.8.0] — 2026-08-20
 
 ### Added
