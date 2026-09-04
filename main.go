@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/garlicKim21/ratatosk-mcp/internal/version"
@@ -162,6 +163,7 @@ func main() {
 			"severity_min to filter. Components with zero changes carry tracked:true|false — tracked:false means " +
 			"the project is NOT covered by ratatosk, so the absence of changes is no-coverage, not safety. " +
 			"Drill down with get_release or changes_by_entity.",
+		InputSchema: checkStackSchema(),
 	}, checkStackTool)
 
 	// Audit stream (P3): observes tools/call when MCP_AUDIT is set; the
@@ -282,11 +284,22 @@ type listChangesArgs struct {
 	Family  string `json:"family,omitempty" jsonschema:"security|breaking|deprecated — what kind of thing it is"`
 	Bucket  string `json:"bucket,omitempty" jsonschema:"action|check|plan — how to act now. action applies to everyone; check only if applies_if matches your setup; plan is announced for later"`
 	Since   int    `json:"since,omitempty" jsonschema:"cursor: return changes with seq greater than this"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"page size, default 50, max 200"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"page size, default 20, max 200 — raise it when you are syncing a local copy, not when you are answering one question"`
 }
+
+// defaultChangesLimit is what an unspecified limit means to this server — the
+// upstream default (50) is a browsing size, and one measured call with it came
+// back at 104,463 characters into a model that then re-reads it every turn.
+// Paging is the mechanism this tool is built on (next_since), so a caller who
+// wants the bigger page asks for it; a caller who did not think about size
+// gets one that fits.
+const defaultChangesLimit = 20
 
 func listChangesTool(ctx context.Context, req *mcp.CallToolRequest, args listChangesArgs) (*mcp.CallToolResult, any, error) {
 	ctx = requestContext(ctx, "list_changes", req)
+	if args.Limit <= 0 {
+		args.Limit = defaultChangesLimit
+	}
 	page, err := api.listChanges(ctx, args.Project, args.Family, args.Bucket, args.Since, args.Limit)
 	if err != nil {
 		return errResult(err), nil, nil
@@ -378,10 +391,92 @@ type stackComponent struct {
 	VersionSource string `json:"version_source,omitempty" jsonschema:"where the running version was read, e.g. daemonset/cilium image tag or a user-provided value; echoed back so the claim can be audited"`
 }
 
+// checkStackSchema is the inferred schema with one widening: components also
+// accepts the JSON-encoded-string form. Without this the SDK refuses that shape
+// before the handler ever runs, and the refusal is the expensive part
+// (see stackComponents). The array form stays first and keeps its full
+// description, so it remains what a model reads as "the way to call this".
+func checkStackSchema() *jsonschema.Schema {
+	s, err := jsonschema.For[checkStackArgs](nil)
+	if err != nil {
+		panic(fmt.Errorf("check_stack schema: %w", err)) // wiring bug, not runtime input
+	}
+	arrayForm := s.Properties["components"]
+	s.Properties["components"] = &jsonschema.Schema{
+		Description: arrayForm.Description,
+		AnyOf: []*jsonschema.Schema{
+			arrayForm,
+			{Type: "string", Description: "the same array JSON-encoded as a string; accepted, but send the array"},
+		},
+	}
+	return s
+}
+
+// stackComponents accepts what models actually send, not only what the schema
+// asks for. A self-hosted model was measured sending the whole array as a JSON
+// *string* (`"[{\"name\": …}]"`) and was refused 8 times out of 8 — and a schema
+// refusal is not free on that side: the model burns a whole turn regenerating
+// arguments, about two minutes each, so eight microsecond-cheap refusals cost
+// that session 16 productive minutes (hub measurement, 2026-09-04). The wire
+// form is unambiguous either way, so we parse it and get on with the work.
+type stackComponents []stackComponent
+
+func (s *stackComponents) UnmarshalJSON(b []byte) error {
+	trimmed := strings.TrimSpace(string(b))
+	if strings.HasPrefix(trimmed, `"`) {
+		// The array arrived JSON-encoded inside a string. Unwrap once, then
+		// read it as the array it was meant to be.
+		var inner string
+		if err := json.Unmarshal(b, &inner); err != nil {
+			return fmt.Errorf("components: %w — %s", err, componentsShapeHint)
+		}
+		var out []stackComponent
+		if err := json.Unmarshal([]byte(inner), &out); err != nil {
+			return fmt.Errorf("components arrived as a string but its contents are not a JSON array: %w — %s", err, componentsShapeHint)
+		}
+		*s = out
+		return nil
+	}
+	var out []stackComponent
+	if err := json.Unmarshal(b, &out); err != nil {
+		return fmt.Errorf("components: %w — %s", err, componentsShapeHint)
+	}
+	*s = out
+	return nil
+}
+
+// componentsShapeHint is carried in every rejection this type can produce.
+// An error that only echoes what was received leaves the model guessing: the
+// measured run varied the same mistake eight times. Showing the shape once is
+// what turns a refusal into one corrected retry.
+const componentsShapeHint = `expected components like [{"project":"cilium","version":"v1.19.5"}] ` +
+	`(project = the slug from list_projects; version = exactly as the project publishes it)`
+
+// UnmarshalJSON accepts "name" as an alias for "project". Models reach for
+// "name" (measured), and refusing that costs a turn to learn nothing: the
+// value they put there is the slug we would have asked for. The alias is
+// deliberately absent from the schema and the docs — list_projects remains the
+// way to resolve a slug, and advertising a second spelling would blur that.
+func (c *stackComponent) UnmarshalJSON(b []byte) error {
+	type raw stackComponent // no methods: plain decode
+	var v struct {
+		raw
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return fmt.Errorf("component: %w — %s", err, componentsShapeHint)
+	}
+	*c = stackComponent(v.raw)
+	if c.Project == "" {
+		c.Project = v.Name
+	}
+	return nil
+}
+
 type checkStackArgs struct {
-	Components  []stackComponent `json:"components" jsonschema:"the running stack to check"`
-	SeverityMin string           `json:"severity_min,omitempty" jsonschema:"only changes at or above this severity: info|low|medium|high|critical"`
-	Detail      string           `json:"detail,omitempty" jsonschema:"brief (default): summary + the items to act on, split by bucket; full: every change verbatim"`
+	Components  stackComponents `json:"components" jsonschema:"the running stack to check"`
+	SeverityMin string          `json:"severity_min,omitempty" jsonschema:"only changes at or above this severity: info|low|medium|high|critical"`
+	Detail      string          `json:"detail,omitempty" jsonschema:"brief (default): summary + the items to act on, split by bucket; full: every change verbatim"`
 }
 
 var severityRank = map[string]int{"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -442,7 +537,18 @@ type componentReport struct {
 
 // otherChangesCap bounds the one-liner tail of a brief report; whatever is cut
 // is counted in other_changes_omitted — never dropped silently.
-const otherChangesCap = 100
+//
+// 100 was a cap against absurdity, not a budget. Measured: a five-component
+// brief came back at 85,948 characters, and this tail was most of it — 100
+// one-liners per component for the changes the server already judged to need
+// no decision (plan/note; action_required and check_config are uncapped and
+// unaffected). The prompt route was tried first and does not close this:
+// severity_min is in the tool description AND in the agent prompt, and across
+// two measured fleets it was used zero times out of 13 calls — a parameter
+// nobody passes is not a budget, so the default has to be one (hub, 2026-09-04).
+// The tail still earns its place at a smaller size: it is how a caller sees
+// that a component moved at all when nothing needs doing.
+const otherChangesCap = 25
 
 // maxComponents bounds one check_stack call. Each component fans out to full
 // upstream paging plus a probe on a miss, so an unbounded list is a request

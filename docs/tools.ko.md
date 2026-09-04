@@ -221,8 +221,10 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if 판정
 | `detail` | 아니오 | string | `brief` | `brief`: `summary`와 버킷별 세 목록(병합·한 줄씩). `full`: 해당하는 변경 전문을 `relevant_changes`에(병합 없음, 요약 없음) — 컴포넌트당 50건에서 자르고 잘린 수는 `relevant_changes_omitted`에 |
 | `severity_min` | 아니오 | string | *(없음 = 전부)* | 이 심각도 이상만: `info`, `low`, `medium`, `high`, `critical` |
 
-`brief`에서 `other_changes` 꼬리는 컴포넌트당 100건에서 자르고 잘린 수는
-`other_changes_omitted`에 실립니다. 조용히 버리는 일은 없습니다.
+`brief`에서 `other_changes` 꼬리는 컴포넌트당 25건에서 자르고 잘린 수는
+`other_changes_omitted`에 실립니다. 조용히 버리는 일은 없습니다 —
+`action_required`와 `check_config`에는 상한이 없고, 나머지는
+`detail:"full"` 또는 `get_release`로 전부 받을 수 있습니다.
 
 ### 예시 호출
 
@@ -956,7 +958,7 @@ CVE id와 권고 id를 둘 다 물어보세요. 노트가 둘 중 하나만 인�
 | `family` | 아니오 | string | *(없음 = 전부)* | `security`, `breaking`, `deprecated` |
 | `bucket` | 아니오 | string | *(없음 = 전부)* | `action`, `check`, `plan` |
 | `since` | 아니오 | integer | *(없음 = 처음부터)* | 커서. `seq`가 이 값보다 큰 변경만. 직전 응답의 `next_since`를 넣으세요 |
-| `limit` | 아니오 | integer | `50` | 페이지 크기. 최대 `200` |
+| `limit` | 아니오 | integer | `20` | 페이지 크기. 최대 `200`. 로컬 사본을 동기화할 때 올리고, 질문 하나에 답할 때는 그대로 두세요 |
 
 ### 예시 호출
 

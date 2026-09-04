@@ -229,8 +229,10 @@ k8s_get_resource_yaml (kube-system/cilium-config)  ← applies_if の判定
 | `detail` | いいえ | string | `brief` | `brief`：`summary` とバケット別の 3 リスト（マージ済み・1 行ずつ）。`full`：該当する変更を全文で `relevant_changes` に（マージなし・サマリなし） — コンポーネントあたり 50 件で打ち切り、切られた数は `relevant_changes_omitted` に |
 | `severity_min` | いいえ | string | *(なし = すべて)* | この深刻度以上のみ：`info`、`low`、`medium`、`high`、`critical` |
 
-`brief` では `other_changes` の末尾はコンポーネントあたり 100 件で打ち切られ、
-切られた数は `other_changes_omitted` に載ります。黙って捨てることはありません。
+`brief` では `other_changes` の末尾はコンポーネントあたり 25 件で打ち切られ、
+切られた数は `other_changes_omitted` に載ります。黙って捨てることはありません —
+`action_required` と `check_config` に上限はなく、残りは `detail:"full"` または
+`get_release` で取得できます。
 
 ### 呼び出し例
 
@@ -974,7 +976,7 @@ GHSA id だけで引用されたアドバイザリは CVE id では届きませ�
 | `family` | いいえ | string | *(なし = すべて)* | `security`、`breaking`、`deprecated` |
 | `bucket` | いいえ | string | *(なし = すべて)* | `action`、`check`、`plan` |
 | `since` | いいえ | integer | *(なし = 最初から)* | カーソル。`seq` がこの値より大きい変更のみ。直前のレスポンスの `next_since` を渡します |
-| `limit` | いいえ | integer | `50` | ページサイズ。最大 `200` |
+| `limit` | いいえ | integer | `20` | ページサイズ。最大 `200`。ローカルコピーの同期時は上げ、単発の質問では既定のままに |
 
 ### 呼び出し例
 

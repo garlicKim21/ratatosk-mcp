@@ -16,6 +16,24 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
   for a named resource, starts `check_stack` at `brief`, and passes an explicit
   `limit` to `list_changes`. Chart and kagent example only — no image change,
   so a `helm upgrade` from a checkout picks it up without a release.
+- `check_stack` briefings carry a shorter tail: `other_changes` is capped at 25
+  per component instead of 100, with the overflow still counted in
+  `other_changes_omitted`. `action_required` and `check_config` are untouched
+  and remain uncapped. A measured five-component briefing was 85,948 characters
+  and this tail was most of it, for changes the server had already judged to
+  need no decision. Asking callers to narrow with `severity_min` did not work:
+  it went unused in 13 of 13 measured calls across two model fleets, so the
+  default had to be the budget.
+- `list_changes` returns 20 changes when no `limit` is given, down from the
+  upstream default of 50. One measured default call was 104,463 characters.
+  Paging is unchanged — a caller syncing a local copy raises `limit` and follows
+  `next_since` as before.
+- `check_stack` accepts the argument shapes models actually send: `components`
+  JSON-encoded as a string, and `name` as an alias for `project`. Both were
+  refused before, and a refusal is not cheap on the other side — a self-hosted
+  model spent about two minutes per rejection regenerating arguments, 8 out of 8
+  calls in one measured session. Rejections that remain now carry a minimal
+  correct example instead of only echoing what arrived.
 
 ## [0.8.0] — 2026-08-20
 

@@ -233,9 +233,10 @@ matter, switch to `get_matter`.
 | `detail` | no | string | `brief` | `brief`: `summary` plus the three bucket lists, merged and one line each. `full`: every matching change verbatim in `relevant_changes`, unmerged and with no summary — capped at 50 per component, the overflow counted in `relevant_changes_omitted` |
 | `severity_min` | no | string | *(none = all)* | Only changes at or above this severity: `info`, `low`, `medium`, `high`, `critical` |
 
-In `brief` mode the `other_changes` tail is capped at 100 per component,
+In `brief` mode the `other_changes` tail is capped at 25 per component,
 with the overflow counted in `other_changes_omitted`. Nothing is ever
-dropped silently.
+dropped silently — `action_required` and `check_config` are not capped, and
+`detail:"full"` or `get_release` returns the rest.
 
 ### Example call
 
@@ -980,7 +981,7 @@ changes.
 | `family` | no | string | *(none = all)* | `security`, `breaking`, or `deprecated` |
 | `bucket` | no | string | *(none = all)* | `action`, `check`, or `plan` |
 | `since` | no | integer | *(none = from the beginning)* | Cursor: only changes with a `seq` greater than this. Pass the previous response's `next_since` |
-| `limit` | no | integer | `50` | Page size. Maximum `200` |
+| `limit` | no | integer | `20` | Page size. Maximum `200`. Raise it when syncing a local copy, not when answering one question |
 
 ### Example call
 

@@ -417,3 +417,65 @@ func TestSinglePrefixedLineIsStillADroppedPrefix(t *testing.T) {
 		t.Fatal("a bare v1.12.0 is the main line, which this project never publishes — the note must fire")
 	}
 }
+
+// A refusal costs a self-hosted model a whole turn (~2 min, measured 8/8
+// failures in one session), so the wire forms models actually send must land
+// in the same place as the documented one. Both of these were observed live.
+func TestCheckStackAcceptsTheShapesModelsSend(t *testing.T) {
+	cases := []struct {
+		name string
+		args string
+	}{
+		{"documented array", `{"components":[{"project":"cilium","version":"v1.19.5"}]}`},
+		{"array JSON-encoded as a string", `{"components":"[{\"project\": \"cilium\", \"version\": \"v1.19.5\"}]"}`},
+		{"name instead of project", `{"components":[{"name":"cilium","version":"v1.19.5"}]}`},
+		{"string form with name key", `{"components":"[{\"name\": \"cilium\", \"version\": \"v1.19.5\"}]"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got checkStackArgs
+			if err := json.Unmarshal([]byte(tc.args), &got); err != nil {
+				t.Fatalf("rejected a shape we promised to accept: %v", err)
+			}
+			if len(got.Components) != 1 {
+				t.Fatalf("components = %d, want 1", len(got.Components))
+			}
+			if got.Components[0].Project != "cilium" || got.Components[0].Version != "v1.19.5" {
+				t.Fatalf("landed wrong: %+v", got.Components[0])
+			}
+		})
+	}
+}
+
+// The schema is what stops the SDK refusing the string form before the handler
+// runs. If the widening is lost, the tolerance above becomes unreachable.
+func TestCheckStackSchemaAcceptsBothComponentForms(t *testing.T) {
+	s := checkStackSchema()
+	comp := s.Properties["components"]
+	if len(comp.AnyOf) != 2 {
+		t.Fatalf("components schema is not widened: %+v", comp)
+	}
+	// The inferred array branch spells its type as ["null","array"]; the added
+	// one is a plain string. Assert on what each branch admits, not on spelling.
+	array := comp.AnyOf[0]
+	if array.Type != "array" && !slices.Contains(array.Types, "array") {
+		t.Fatalf("first branch is not the documented array form: %+v", array)
+	}
+	if comp.AnyOf[1].Type != "string" {
+		t.Fatalf("second branch should accept the JSON-encoded string, got %q", comp.AnyOf[1].Type)
+	}
+}
+
+// An error that only echoes the input leaves the model varying the same
+// mistake — the measured run did it eight times. Every rejection this type can
+// produce must carry the shape.
+func TestComponentsRejectionShowsTheShape(t *testing.T) {
+	var got checkStackArgs
+	err := json.Unmarshal([]byte(`{"components":"not json at all"}`), &got)
+	if err == nil {
+		t.Fatal("garbage was accepted")
+	}
+	if !strings.Contains(err.Error(), `[{"project":"cilium","version":"v1.19.5"}]`) {
+		t.Fatalf("rejection does not show the correct shape: %v", err)
+	}
+}
