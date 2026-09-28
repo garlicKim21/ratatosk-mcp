@@ -5,6 +5,20 @@ Helm chart `appVersion`; see `docs/` for the release procedure.
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-09-28
+
+### Fixed
+
+- `check_stack` refuses a component that carries no project instead of
+  scanning every project for it. A model that sent `project_slug` where the
+  schema says `project` had the key dropped, and the empty name went upstream
+  as "no project filter": one call paged all 2,435 changes and returned
+  676,771 characters, which the calling model then timed out re-reading. The
+  refusal names the keys that arrived and shows the expected shape, so one
+  retry fixes it; the same call now gets a 318-byte answer and makes no
+  upstream request. `maxComponents` bounded how many components fan out; this
+  bounds each one. Reported by the basphere hub from a live run.
+
 ### Changed
 
 - A `check_stack` briefing shortens quotes to 120 characters with an ellipsis;
