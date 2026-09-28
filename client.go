@@ -295,6 +295,12 @@ func (c *apiClient) listChanges(ctx context.Context, project, family, bucket str
 // allProjectChanges pages through every change for a project. Only the project
 // slug is sent to the server — never the caller's running version.
 func (c *apiClient) allProjectChanges(ctx context.Context, project string) ([]Change, error) {
+	// An empty slug drops the project filter and this loop pages the whole
+	// corpus. check_stack refuses such a component first; this is the backstop
+	// at the one place the fan-out happens.
+	if project == "" {
+		return nil, fmt.Errorf("refusing to page changes without a project")
+	}
 	var all []Change
 	since := 0
 	for {

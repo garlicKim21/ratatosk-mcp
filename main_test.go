@@ -480,6 +480,66 @@ func TestComponentsRejectionShowsTheShape(t *testing.T) {
 	}
 }
 
+// Replay of the hub's 2026-09-28 call: project_slug instead of project. It used
+// to pass as an empty project and page every change upstream. It must now be
+// refused before any upstream request, and the refusal must name the key that
+// went unread so the retry can fix it.
+func TestCheckStackRefusesComponentWithoutProject(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("upstream was called (%s?%s) for a component with no project", r.URL.Path, r.URL.RawQuery)
+		w.Write([]byte(`{"changes":[]}`))
+	}))
+	defer ts.Close()
+	orig := api
+	api = newAPIClient(ts.URL)
+	defer func() { api = orig }()
+
+	cases := []struct {
+		name, args, want string
+	}{
+		{"hub replay, string form", `{"components":"[{\"version\": \"v1.35.0\", \"project_slug\": \"kubernetes\"}, {\"version\": \"2.2.0\", \"project_slug\": \"containerd\"}]","detail":"brief"}`,
+			"component 1 has no project (keys received: project_slug, version)"},
+		{"empty project value", `{"components":[{"project":"","version":"v1.19.5"}]}`,
+			"component 1 has no project (keys received: project, version)"},
+		{"only the second is missing", `{"components":[{"project":"cilium","version":"v1.19.5"},{"slug":"envoy","version":"v1.36.8"}]}`,
+			"component 2 has no project (keys received: slug, version)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var args checkStackArgs
+			if err := json.Unmarshal([]byte(tc.args), &args); err != nil {
+				t.Fatalf("decode should stay tolerant; the refusal belongs to the handler: %v", err)
+			}
+			res, _, err := checkStackTool(context.Background(), nil, args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.IsError {
+				t.Fatal("a component with no project was accepted")
+			}
+			text := res.Content[0].(*mcp.TextContent).Text
+			if !strings.Contains(text, tc.want) {
+				t.Fatalf("refusal = %q, want it to contain %q", text, tc.want)
+			}
+			if !strings.Contains(text, `[{"project":"cilium","version":"v1.19.5"}]`) {
+				t.Fatalf("refusal does not show the correct shape: %q", text)
+			}
+		})
+	}
+}
+
+// The backstop where the fan-out happens: an empty slug must never page.
+func TestAllProjectChangesRefusesEmptyProject(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("upstream was called (%s?%s) with an empty project", r.URL.Path, r.URL.RawQuery)
+		w.Write([]byte(`{"changes":[]}`))
+	}))
+	defer ts.Close()
+	if _, err := newAPIClient(ts.URL).allProjectChanges(context.Background(), ""); err == nil {
+		t.Fatal("an empty project paged the corpus")
+	}
+}
+
 // A briefing shortens long quotes; a quote is evidence, so the cut must be
 // visible and must never split a rune (the text has to stay citable).
 func TestBriefQuoteBoundsTheTailVisibly(t *testing.T) {

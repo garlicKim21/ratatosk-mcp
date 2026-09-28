@@ -389,6 +389,12 @@ type stackComponent struct {
 	// invented one. What it buys is a machine-readable claim to compare against
 	// later, and a slot the caller has to fill by actually looking something up.
 	VersionSource string `json:"version_source,omitempty" jsonschema:"where the running version was read, e.g. daemonset/cilium image tag or a user-provided value; echoed back so the claim can be audited"`
+	// sentKeys lists the keys a component arrived with, recorded only when no
+	// project could be read from them. Unknown keys are otherwise dropped, so
+	// without this a refusal could only echo an empty value — the model needs
+	// to see that its project_slug went unread. A string, not a slice, so the
+	// struct stays comparable.
+	sentKeys string
 }
 
 // checkStackSchema is the inferred schema with one widening: components also
@@ -469,6 +475,17 @@ func (c *stackComponent) UnmarshalJSON(b []byte) error {
 	*c = stackComponent(v.raw)
 	if c.Project == "" {
 		c.Project = v.Name
+	}
+	if c.Project == "" {
+		var keys map[string]json.RawMessage
+		if json.Unmarshal(b, &keys) == nil {
+			names := make([]string, 0, len(keys))
+			for k := range keys {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			c.sentKeys = strings.Join(names, ", ")
+		}
 	}
 	return nil
 }
@@ -661,6 +678,21 @@ func checkStackTool(ctx context.Context, req *mcp.CallToolRequest, args checkSta
 	// of upstream requests against our own API. A real stack is tens of items.
 	if len(args.Components) > maxComponents {
 		return errResult(fmt.Errorf("too many components: %d (max %d)", len(args.Components), maxComponents)), nil, nil
+	}
+	// A component without a project is refused, never scanned. Upstream reads a
+	// missing project filter as "every project", so one such component paged the
+	// whole corpus: a model that sent project_slug got 2,435 changes back in a
+	// 676,771-character answer and timed out re-reading it (hub, 2026-09-28).
+	// The cap above bounds how many components fan out; this bounds each one.
+	for i, comp := range args.Components {
+		if strings.TrimSpace(comp.Project) != "" {
+			continue
+		}
+		sent := comp.sentKeys
+		if sent == "" {
+			sent = "none"
+		}
+		return errResult(fmt.Errorf("component %d has no project (keys received: %s) — %s", i+1, sent, componentsShapeHint)), nil, nil
 	}
 	minRank := 0
 	if args.SeverityMin != "" {
